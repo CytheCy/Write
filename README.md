@@ -75,6 +75,22 @@ Use **File → Open Recent** to reopen one of your last 10 opened or saved files
 
 Use **File → Reload Document** to reread the current file from disk. If you have unsaved changes, Write asks whether to save, discard, or cancel before reloading.
 
+The toolbar ribbon on the left displays the **Scatchpad** notepad button. Click it to toggle an editable Markdown panel on the left. Scratch notes are saved as metadata in the same Markdown file and stay out of the main document, headings, search, and word count. For example, this block in a Markdown file displays only its contents, starting with `# hi`, in the Scatchpad:
+
+```markdown
+---
+scratch:# hi
+Where are we?
+- in
+- th
+- way
+---
+```
+
+You can also open the panel and write notes to create the block when saving. Plain text (`.txt`) files display their existing contents literally.
+
+Enable **Settings → Auto-hide toolbar ribbon** to hide it while writing. Move the pointer to the left edge of the document area to reveal it in 0.3 seconds. Like the right heading panel, it waits five seconds after the pointer leaves before sliding closed in about three quarters of a second. Returning to the ribbon cancels the countdown. Disable the option to keep the ribbon visible. Your choice is remembered across restarts.
+
 Markdown notes with two or more `#` headings show a heading panel on the right. Hover over the side panel icon immediately left of Minimize and choose **Hide**, **Narrow**, or **Full**. Narrow shows the first three characters of each heading. Full shows more of each heading and lets you drag the divider to adjust its width. With **Auto Hide** enabled, move the pointer to the right edge of the window to reveal the Narrow or Full panel. After the pointer leaves the panel area, the panel stays open for five seconds before sliding closed. Returning to the panel cancels the countdown. The panel slides open or closed in about three quarters of a second. The same controls are available under **Settings → Heading panel**. Your choices and Full width are remembered across restarts. Click a heading to jump to it in the editor. The icon appears only when there are at least two headings. The list updates as you edit and excludes fenced code. Plain text files do not show the panel.
 
 Spell checking is enabled by default and works offline with an English dictionary.

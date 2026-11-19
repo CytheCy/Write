@@ -77,6 +77,32 @@ MAX_RECENT_FILES = 10
 DEFAULT_FONT_SIZE = 12
 MIN_FONT_SIZE = 6
 MAX_FONT_SIZE = 72
+AUTO_HIDE_DELAY_MS = 5000
+PANEL_SLIDE_DURATION_MS = 750
+RIBBON_REVEAL_DURATION_MS = 300
+
+
+def split_scratchpad(source):
+    """Extract a complete scratch block, leaving Markdown examples untouched."""
+    pattern = re.compile(r"^---[ \t]*\nscratch:[ \t]?(.*?)\n---[ \t]*(?:\n|$)",
+                         re.MULTILINE | re.DOTALL)
+    fence = None
+    offset = 0
+    candidates = {match.start(): match for match in pattern.finditer(source)}
+    for line in source.splitlines(keepends=True):
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if fence:
+            if (marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence)
+                    and not line[marker.end():].strip()):
+                fence = None
+        elif marker:
+            fence = marker[1]
+        elif offset in candidates:
+            match = candidates[offset]
+            return (source[:offset] + source[match.end():], match[1],
+                    match[0], offset)
+        offset += len(line)
+    return source, '', '', 0
 
 
 class FileChooserResponse(QObject):
@@ -1569,6 +1595,7 @@ class MainWindow(QMainWindow):
             self.settings.value("font_size", DEFAULT_FONT_SIZE, type=int)))
         self.paragraph_spacing = max(0, min(48, self.settings.value("paragraph_spacing", 14, type=int)))
         self.max_page_width = max(0, min(10000, self.settings.value("max_page_width", 950, type=int)))
+        self.ribbon_auto_hide = self.settings.value("ribbon_auto_hide", False, type=bool)
         self.current_file: Path | None = None
         self.newline = "\n"
         self.has_bom = False
@@ -1584,6 +1611,9 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
         self.editor = NoteEditor()
+        self._scratch_raw = ''
+        self._scratch_original = ''
+        self._scratch_anchor = None
         self._saved_text = self.editor.toPlainText()
         self.editor.setObjectName("editor")
         self.editor.setFont(QFont("Noto Sans", self.font_size))
@@ -1618,24 +1648,54 @@ class MainWindow(QMainWindow):
         if self.heading_panel_state not in ("narrow", "full", "closed"):
             self.heading_panel_state = "narrow"
         self.heading_panel_auto_hide = self.settings.value("heading_panel_auto_hide", False, type=bool)
-        self.setAttribute(Qt.WidgetAttribute.WA_Hover, self.heading_panel_auto_hide)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, self.heading_panel_auto_hide or self.ribbon_auto_hide)
         self._resizing_heading_panel = False
         self._heading_panel_target_visible = False
         self.heading_panel_animation = QVariantAnimation(self)
-        self.heading_panel_animation.setDuration(750)
+        self.heading_panel_animation.setDuration(PANEL_SLIDE_DURATION_MS)
         self.heading_panel_animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
         self.heading_panel_animation.valueChanged.connect(self.animate_heading_panel_width)
         self.heading_panel_animation.finished.connect(self.finish_heading_panel_transition)
         self.heading_panel_hide_timer = QTimer(self)
         self.heading_panel_hide_timer.setSingleShot(True)
         self.heading_panel_hide_timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self.heading_panel_hide_timer.setInterval(5000)
+        self.heading_panel_hide_timer.setInterval(AUTO_HIDE_DELAY_MS)
         self.heading_panel_hide_timer.timeout.connect(self.hide_heading_panel_after_delay)
         self.content_splitter.setSizes([self.width() - self.heading_panel_expanded_width - 6,
                                         self.heading_panel_expanded_width])
         self.content_splitter.handle(1).setToolTip("Drag to resize the headings panel")
         self.content_splitter.handle(1).setEnabled(self.heading_panel_state == "full")
-        root_layout.addWidget(self.content_splitter, 1)
+        self.content_row = QWidget()
+        self.content_layout = QHBoxLayout(self.content_row)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setSpacing(0)
+        self.scratchpad_panel = QWidget()
+        self.scratchpad_panel.setObjectName("scratchpadPanel")
+        self.scratchpad_panel.setMinimumWidth(180)
+        scratch_layout = QVBoxLayout(self.scratchpad_panel)
+        scratch_layout.setContentsMargins(10, 12, 10, 10)
+        scratch_layout.addWidget(QLabel("Scatchpad"))
+        self.scratchpad_editor = NoteEditor()
+        self.scratchpad_editor.setObjectName("scratchpadEditor")
+        self.scratchpad_editor.setAccessibleName("Scatchpad")
+        self.scratchpad_editor.setPlaceholderText("Write scratch notes…")
+        self.scratchpad_editor.setFont(QFont("Noto Sans", self.font_size))
+        self.scratchpad_editor.setViewportMargins(0, 0, 0, 0)
+        self.scratchpad_editor.document().setDocumentMargin(8)
+        self.scratchpad_highlighter = MarkdownHighlighter(
+            self.scratchpad_editor.document(), self.theme, self.scratchpad_editor)
+        self.scratchpad_editor.sourceChanged.connect(self.on_scratchpad_changed)
+        scratch_layout.addWidget(self.scratchpad_editor)
+        self.workspace_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.workspace_splitter.setChildrenCollapsible(False)
+        self.workspace_splitter.addWidget(self.scratchpad_panel)
+        self.workspace_splitter.addWidget(self.content_splitter)
+        self.workspace_splitter.setStretchFactor(0, 0)
+        self.workspace_splitter.setStretchFactor(1, 1)
+        self.workspace_splitter.setSizes([280, 840])
+        self.scratchpad_panel.hide()
+        self.content_layout.addWidget(self.workspace_splitter, 1)
+        root_layout.addWidget(self.content_row, 1)
         self.heading_panel.hide()
         self.content_splitter.splitterMoved.connect(self.remember_heading_panel_width)
         self.headings = []
@@ -1776,6 +1836,7 @@ class MainWindow(QMainWindow):
         self.editor.spelling = Spelling(self.editor, self.settings, self.highlighter)
         self.apply_theme()
         self.setup_actions()
+        self.setup_ribbon()
         QApplication.instance().installEventFilter(self)
         self.editor.sourceEdited.connect(self.note_heading_edit)
         self.editor.documentAboutToChange.connect(self.reset_heading_cache)
@@ -1829,6 +1890,8 @@ class MainWindow(QMainWindow):
             self.editor.setFont(font)
             self.editor.setTabStopDistance(self.editor.fontMetrics().horizontalAdvance(" ") * 4)
             self.highlighter.update_colors(self.theme)
+            self.scratchpad_editor.setFont(font)
+            self.scratchpad_highlighter.update_colors(self.theme)
             self.editor.spelling.color = QColor(self.theme['error'])
             self.editor.spelling.refresh()
             self.refresh_find_selections()
@@ -1973,6 +2036,10 @@ class MainWindow(QMainWindow):
         width_action = QAction("Max Page Width…", self)
         width_action.triggered.connect(self.show_max_page_width)
         settings_menu.addAction(width_action)
+        self.ribbon_auto_hide_action = settings_menu.addAction("Auto-hide toolbar ribbon")
+        self.ribbon_auto_hide_action.setCheckable(True)
+        self.ribbon_auto_hide_action.setChecked(self.ribbon_auto_hide)
+        self.ribbon_auto_hide_action.toggled.connect(self.set_ribbon_auto_hide)
         self.heading_panel_menu = QMenu("Heading panel", settings_menu)
         settings_menu.addMenu(self.heading_panel_menu)
         panel_menu = self.heading_panel_menu
@@ -2032,6 +2099,111 @@ class MainWindow(QMainWindow):
         self.menuBar().title_label = self.title_label
         self.menuBar().position_title()
 
+    def setup_ribbon(self):
+        self.ribbon = QWidget()
+        self.ribbon.setObjectName("toolbarRibbon")
+        self.ribbon.setAccessibleName("Toolbar ribbon")
+        self.ribbon_expanded_width = 48
+        self.ribbon.setFixedWidth(self.ribbon_expanded_width)
+        layout = QVBoxLayout(self.ribbon)
+        layout.setContentsMargins(6, 10, 6, 10)
+        layout.setSpacing(6)
+        self.ribbon_buttons = {}
+
+        notepad_button = BoxIconButton("notepad", self.ribbon)
+        notepad_button.setFixedSize(36, 36)
+        notepad_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        notepad_button.setAccessibleName("Scatchpad")
+        notepad_button.setToolTip("Scatchpad")
+        notepad_button.setCheckable(True)
+        notepad_button.toggled.connect(self.toggle_scratchpad)
+        layout.addWidget(notepad_button)
+        self.ribbon_buttons["Scatchpad"] = notepad_button
+        layout.addStretch(1)
+        self.ribbon_reveal = QWidget()
+        self.ribbon_reveal.setObjectName("ribbonReveal")
+        self.ribbon_reveal.setFixedWidth(6)
+        self.ribbon_reveal.setToolTip("Move here to reveal the toolbar ribbon")
+        self.content_layout.insertWidget(0, self.ribbon_reveal)
+        self.content_layout.insertWidget(1, self.ribbon)
+        self._ribbon_target_visible = True
+        self.ribbon_animation = QVariantAnimation(self)
+        self.ribbon_animation.setDuration(PANEL_SLIDE_DURATION_MS)
+        self.ribbon_animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self.ribbon_animation.valueChanged.connect(self.animate_ribbon_width)
+        self.ribbon_animation.finished.connect(self.finish_ribbon_transition)
+        self.ribbon_hide_timer = QTimer(self)
+        self.ribbon_hide_timer.setSingleShot(True)
+        self.ribbon_hide_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self.ribbon_hide_timer.setInterval(AUTO_HIDE_DELAY_MS)
+        self.ribbon_hide_timer.timeout.connect(self.hide_ribbon_after_delay)
+        self.set_ribbon_auto_hide(self.ribbon_auto_hide)
+
+    def set_ribbon_auto_hide(self, enabled):
+        self.ribbon_auto_hide = enabled
+        self.settings.setValue("ribbon_auto_hide", enabled)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, enabled or self.heading_panel_auto_hide)
+        self.ribbon_hide_timer.stop()
+        self.ribbon_reveal.setVisible(enabled)
+        self.update_ribbon_visibility(animate=True)
+
+    def update_ribbon_visibility(self, *, reveal=False, animate=False):
+        visible = not self.ribbon_auto_hide or reveal
+        animation = self.ribbon_animation
+        running = animation.state() == QAbstractAnimation.State.Running
+        if visible == self._ribbon_target_visible and (animate or not running):
+            return
+        self._ribbon_target_visible = visible
+        self.ribbon_hide_timer.stop()
+        animation.stop()
+        animation.setDuration(RIBBON_REVEAL_DURATION_MS if visible else PANEL_SLIDE_DURATION_MS)
+        end_width = self.ribbon_expanded_width if visible else 0
+        if not animate or not self.isVisible() or self.ribbon.width() == end_width:
+            self.finish_ribbon_transition()
+            return
+        start_width = self.ribbon.width()
+        self.ribbon.show()
+        animation.setStartValue(start_width)
+        animation.setEndValue(end_width)
+        animation.start()
+
+    def animate_ribbon_width(self, width):
+        if self.ribbon_animation.state() == QAbstractAnimation.State.Running:
+            self.ribbon.setFixedWidth(width)
+
+    def finish_ribbon_transition(self):
+        self.ribbon.setFixedWidth(self.ribbon_expanded_width if self._ribbon_target_visible else 0)
+        self.ribbon.setVisible(self._ribbon_target_visible)
+
+    def ribbon_contains(self, point):
+        return any(widget.isVisible() and widget.rect().contains(widget.mapFrom(self, point))
+                   for widget in (self.ribbon, self.ribbon_reveal))
+
+    def hide_ribbon_after_delay(self):
+        if not self.ribbon_auto_hide:
+            return
+        if QApplication.activePopupWidget() or QApplication.activeModalWidget():
+            self.ribbon_hide_timer.start()
+        elif not self.ribbon_contains(self.mapFromGlobal(QCursor.pos())):
+            self.update_ribbon_visibility(animate=True)
+
+    def handle_ribbon_event(self, watched, event):
+        if watched is not self or not self.ribbon_auto_hide:
+            return
+        if event.type() == QEvent.Type.HoverMove and not QApplication.mouseButtons():
+            if self.ribbon_contains(event.position().toPoint()):
+                self.ribbon_hide_timer.stop()
+                if not QApplication.activePopupWidget():
+                    self.update_ribbon_visibility(reveal=True, animate=True)
+            elif self._ribbon_target_visible and not self.ribbon_hide_timer.isActive():
+                self.ribbon_hide_timer.start()
+        elif event.type() in (QEvent.Type.Leave, QEvent.Type.WindowDeactivate):
+            if self._ribbon_target_visible and not self.ribbon_hide_timer.isActive():
+                self.ribbon_hide_timer.start()
+        elif event.type() == QEvent.Type.Hide:
+            self.ribbon_hide_timer.stop()
+            self.update_ribbon_visibility()
+
     def show_heading_controls(self):
         if not self.heading_button.isVisible() or QApplication.activePopupWidget():
             return
@@ -2061,7 +2233,7 @@ class MainWindow(QMainWindow):
     def set_heading_panel_auto_hide(self, enabled):
         self.heading_panel_auto_hide = enabled
         self.settings.setValue("heading_panel_auto_hide", enabled)
-        self.setAttribute(Qt.WidgetAttribute.WA_Hover, enabled)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, enabled or self.ribbon_auto_hide)
         self.heading_panel_hide_timer.stop()
         self.update_heading_panel_visibility(animate=True)
 
@@ -2430,8 +2602,10 @@ class MainWindow(QMainWindow):
         font = self.editor.font()
         font.setPointSize(self.font_size)
         self.editor.setFont(font)
+        self.scratchpad_editor.setFont(font)
         self.editor.setTabStopDistance(self.editor.fontMetrics().horizontalAdvance(" ") * 4)
         self.highlighter.rehighlight()
+        self.scratchpad_highlighter.rehighlight()
         self.center_editor_cursor()
         document.setModified(was_modified)
         self.settings.setValue("font_size", self.font_size)
@@ -2528,6 +2702,8 @@ class MainWindow(QMainWindow):
                 self.update_heading_panel_hover(event.position().toPoint())
 
     def eventFilter(self, watched, event):  # noqa: N802
+        if hasattr(self, "ribbon_hide_timer"):
+            self.handle_ribbon_event(watched, event)
         if hasattr(self, "heading_button"):
             self.handle_heading_panel_event(watched, event)
         popup = getattr(self, "document_path_popup", None)
@@ -2635,6 +2811,49 @@ class MainWindow(QMainWindow):
             return False
         return self.open_file(self.current_file)
 
+    def toggle_scratchpad(self, visible):
+        self.scratchpad_panel.setVisible(visible)
+        if visible:
+            self.scratchpad_editor.setFocus()
+        else:
+            self.editor.setFocus()
+
+    def on_scratchpad_changed(self):
+        if not self.loading:
+            self.update_title()
+
+    def load_document_source(self, source, *, markdown=True):
+        body, scratch, raw, offset = (split_scratchpad(source) if markdown
+                                      else (source, '', '', 0))
+        self._scratch_anchor = None
+        self._scratch_raw = raw
+        self._scratch_original = scratch
+        self.scratchpad_editor.setPlainText(scratch)
+        self.scratchpad_editor.document().setModified(False)
+        self.scratchpad_editor.document().clearUndoRedoStacks()
+        self.editor.setPlainText(body)
+        self._scratch_anchor = QTextCursor(self.editor.document())
+        self._scratch_anchor.setPosition(len(body[:offset].encode('utf-16-le')) // 2)
+        self._scratch_anchor.setKeepPositionOnInsert(True)
+
+    def document_source(self):
+        """Reassemble the file without exposing scratch metadata to prose tools."""
+        body = self.editor.toPlainText()
+        scratch = self.scratchpad_editor.toPlainText()
+        if not self._scratch_raw and not scratch:
+            return body
+        raw = (self._scratch_raw if self._scratch_raw and scratch == self._scratch_original
+               else '---\nscratch:' + scratch + '\n---\n')
+        position = self._scratch_anchor.position() if self._scratch_anchor else 0
+        # QTextCursor counts UTF-16 units, whereas Python slices count code points.
+        offset = len(body.encode('utf-16-le')[:position * 2].decode('utf-16-le'))
+        prefix, suffix = body[:offset], body[offset:]
+        if prefix and not prefix.endswith('\n'):
+            prefix += '\n'
+        if suffix and not raw.endswith('\n'):
+            raw += '\n'
+        return prefix + raw + suffix
+
     def open_file(self, path: Path):
         if not self.confirm_discard():
             return False
@@ -2648,7 +2867,7 @@ class MainWindow(QMainWindow):
         self.newline = "\r\n" if "\r\n" in content else ("\r" if "\r" in content else "\n")
         content = content.replace("\r\n", "\n").replace("\r", "\n")
         self.loading = True
-        self.editor.setPlainText(content)
+        self.load_document_source(content, markdown=path.suffix.lower() != '.txt')
         self.loading = False
         self.current_file = path.resolve()
         self.highlighter.enabled = self.current_file.suffix.lower() != ".txt"
@@ -2656,7 +2875,7 @@ class MainWindow(QMainWindow):
         self.editor.update_code_panels()
         self.editor.document().setModified(False)
         self.editor.document().clearUndoRedoStacks()
-        self._saved_text = self.editor.toPlainText()
+        self._saved_text = self.document_source()
         self.editor.moveCursor(self.editor.textCursor().MoveOperation.Start)
         self.update_headings(reset=True)
         self.update_title()
@@ -2669,7 +2888,7 @@ class MainWindow(QMainWindow):
         if not self.confirm_discard():
             return
         self.loading = True
-        self.editor.clear()
+        self.load_document_source('')
         self.loading = False
         self.current_file = None
         self.newline = "\n"
@@ -2679,7 +2898,7 @@ class MainWindow(QMainWindow):
         self.editor.update_code_panels()
         self.editor.document().setModified(False)
         self.editor.document().clearUndoRedoStacks()
-        self._saved_text = self.editor.toPlainText()
+        self._saved_text = self.document_source()
         self.update_title()
         self.update_status()
         self.editor.setFocus()
@@ -2710,7 +2929,7 @@ class MainWindow(QMainWindow):
         if not output.open(QSaveFile.OpenModeFlag.WriteOnly):
             QMessageBox.critical(self, "Could not save file", f"{self.current_file}\n\n{output.errorString()}")
             return False
-        content = self.editor.toPlainText().replace("\n", self.newline).encode("utf-8")
+        content = self.document_source().replace("\n", self.newline).encode("utf-8")
         if self.has_bom:
             content = codecs.BOM_UTF8 + content
         if output.write(content) != len(content) or not output.commit():
@@ -2719,7 +2938,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Could not save file", f"{self.current_file}\n\n{error}")
             return False
         self.editor.document().setModified(False)
-        self._saved_text = self.editor.toPlainText()
+        self._saved_text = self.document_source()
         self.highlighter.enabled = self.current_file.suffix.lower() != ".txt"
         self.highlighter.rehighlight()
         self.editor.update_code_panels()
@@ -2902,7 +3121,7 @@ class MainWindow(QMainWindow):
     def has_unsaved_changes(self):
         # Display-only formatting can reset Qt's modified flag after an edit.
         # The source text last written to disk is the close prompt's authority.
-        return self.editor.toPlainText() != self._saved_text
+        return self.document_source() != self._saved_text
 
     def update_title(self):
         self.reload_action.setEnabled(self.current_file is not None)

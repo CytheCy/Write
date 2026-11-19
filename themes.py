@@ -127,7 +127,14 @@ def stylesheet(t):
             background: {t['editor']}; color: {t['text']};
             selection-background-color: {t['selection']}; selection-color: {t['selection_text']}; }}
         #editor {{ border: none; }}
-        #headingPanel {{ background: {t['sidebar']}; }}
+        #headingPanel, #scratchpadPanel {{ background: {t['sidebar']}; }}
+        #scratchpadEditor {{ border: none; }}
+        #toolbarRibbon {{ background: {t['toolbar']}; border-right: 1px solid {t['border']}; }}
+        #toolbarRibbon QToolButton {{ background: transparent; border: none; padding: 0; }}
+        #toolbarRibbon QToolButton:hover {{ background: {t['hover']}; }}
+        #toolbarRibbon QToolButton:checked {{ background: {t['selection']}; }}
+        #ribbonReveal {{ background: {t['border']}; }}
+        #ribbonReveal:hover {{ background: {t['accent']}; }}
         QSplitter#contentSplitter::handle {{ background: {t['border']}; }}
         QSplitter#contentSplitter::handle:hover {{ background: {t['accent']}; }}
         #headingList {{ background: {t['sidebar']}; border: none; }}
