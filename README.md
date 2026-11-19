@@ -89,7 +89,9 @@ Where are we?
 
 You can also open the panel and write notes to create the block when saving. Plain text (`.txt`) files display their existing contents literally.
 
-Hover over the **Sort A–Z** ribbon icon to open a menu with **Dictionary**, **Thesaurus**, and **Moby Thesaurus**. Click an item to open its panel on the left; use its close button to dismiss it. These panels currently provide space for reference tools; word lookup is not connected yet. Switching back to Scatchpad preserves your scratch notes.
+Hover over the **Sort A–Z** ribbon icon to open a menu with **Dictionary**, **Thesaurus**, and **Moby Thesaurus**. Click an item to open its panel on the left; use its close button to dismiss it. Enter a word and press **Enter** or **Search** to look it up in all three sources, then switch panels to compare results. Dictionary shows Merriam-Webster Collegiate definitions, pronunciation, examples, and word history. Thesaurus shows meanings, synonyms, and antonyms. Moby Thesaurus shows its full list of related words without an API key. Click a suggestion or related word to search again.
+
+Choose **Settings → Reference API key files…** (or **API key files…** in a panel) to select the `.txt` files containing your Merriam-Webster Collegiate Dictionary and Thesaurus keys. Only file paths are saved; keys are read when searching. Lookups require an internet connection. Switching back to Scatchpad preserves your scratch notes.
 
 Enable **Settings → Auto-hide toolbar ribbon** to hide it while writing. Move the pointer to the left edge of the document area to reveal it in 0.3 seconds. Like the right heading panel, it waits five seconds after the pointer leaves before sliding closed in about three quarters of a second. Returning to the ribbon cancels the countdown. Disable the option to keep the ribbon visible. Your choice is remembered across restarts.
 
@@ -146,7 +148,7 @@ Install `requirements.txt` first; no additional test dependencies are needed:
 
 ```bash
 QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v
-python3 -m py_compile main.py themes.py spelling.py
+python3 -m py_compile main.py themes.py spelling.py references.py reference_api.py reference_widgets.py
 ```
 
 Tests cover token completeness, text contrast, live selection, persistence in a

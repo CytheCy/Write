@@ -69,6 +69,7 @@ from PySide6.QtSvg import QSvgRenderer
 
 from themes import (THEMES, apply_application_theme, resolve_theme, saved_theme_id)
 from spelling import Spelling
+from references import ReferenceTools
 from updater import UpdatesDialog
 
 
@@ -1691,12 +1692,10 @@ class MainWindow(QMainWindow):
         self.left_panels.setObjectName("leftPanels")
         self.left_panels.setMinimumWidth(180)
         self.left_panels.addWidget(self.scratchpad_panel)
-        self.reference_panels = {}
-        for name in ("Dictionary", "Thesaurus", "Moby Thesaurus"):
-            panel = QWidget()
-            panel.setAccessibleName(name)
-            reference_layout = QVBoxLayout(panel)
-            reference_layout.setContentsMargins(10, 12, 10, 10)
+        self.reference_tools = ReferenceTools(self.settings, self)
+        self.reference_panels = self.reference_tools.panels
+        for name, panel in self.reference_panels.items():
+            reference_layout = panel.layout()
             header = QHBoxLayout()
             header.addWidget(QLabel(name), 1)
             close_button = BoxIconButton("x", panel)
@@ -1705,10 +1704,8 @@ class MainWindow(QMainWindow):
             close_button.setToolTip(f"Close {name}")
             close_button.clicked.connect(self.close_left_panel)
             header.addWidget(close_button)
-            reference_layout.addLayout(header)
-            reference_layout.addStretch(1)
+            reference_layout.insertLayout(0, header)
             self.left_panels.addWidget(panel)
-            self.reference_panels[name] = panel
         self.workspace_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.workspace_splitter.setChildrenCollapsible(False)
         self.workspace_splitter.addWidget(self.left_panels)
@@ -2032,6 +2029,7 @@ class MainWindow(QMainWindow):
         settings_menu = self.settings_menu
         settings_menu.addAction("Themes…", self.show_appearance)
         settings_menu.addAction("Updates…", self.show_updates)
+        settings_menu.addAction("Reference API key files…", self.reference_tools.show_settings)
         self.spell_check_action = QAction("Spell check (English)", self)
         self.spell_check_action.setCheckable(True)
         self.spell_check_action.setChecked(self.editor.spelling.enabled)
@@ -2895,8 +2893,11 @@ class MainWindow(QMainWindow):
     def open_reference_panel(self, name):
         button = self.ribbon_buttons["Scatchpad"]
         button.setChecked(False)
-        self.left_panels.setCurrentWidget(self.reference_panels[name])
+        panel = self.reference_panels[name]
+        self.left_panels.setCurrentWidget(panel)
         self.left_panels.show()
+        panel.search_input.setFocus()
+        panel.search_input.selectAll()
 
     def close_left_panel(self):
         self.ribbon_buttons["Scatchpad"].setChecked(False)
@@ -3225,6 +3226,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):  # noqa: N802
         if getattr(self, "_updating", False) or self.confirm_discard():
+            self.reference_tools.cancel()
             self.settings.setValue("window_geometry", self.saveGeometry())
             self.settings.setValue("window_normal_geometry", self.normalGeometry())
             self.settings.setValue("window_maximized", self.isMaximized())

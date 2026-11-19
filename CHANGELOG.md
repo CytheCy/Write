@@ -1,3 +1,7 @@
+# Unreleased
+
+- Connect Dictionary, Thesaurus, and Moby Thesaurus side panels to the WordDesk lookup services, with clickable suggestions and related words, API key file settings, and theme-aware results.
+
 # Write v1.0.7
 
 - Use the typewriter-key W icon throughout the app, update installer, desktop launcher, and RPM.

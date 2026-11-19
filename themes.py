@@ -129,6 +129,20 @@ def stylesheet(t):
         #editor {{ border: none; }}
         #headingPanel, #scratchpadPanel, #leftPanels {{ background: {t['sidebar']}; }}
         #scratchpadEditor {{ border: none; }}
+        #referencePanel, #referencePanel QScrollArea, #referencePanel QScrollArea > QWidget > QWidget {{
+            background: {t['sidebar']}; }}
+        #referencePanel QFrame.resultCard {{ background: {t['panel']};
+            border: 1px solid {t['border']}; border-radius: 8px; }}
+        #referencePanel QLabel {{ background: transparent; }}
+        #referencePanel QLabel.resultHeadword {{ font-size: 22px; font-weight: 600; }}
+        #referencePanel QLabel.emptyTitle {{ font-size: 16px; font-weight: 600; }}
+        #referencePanel QLabel.sectionLabel, #referencePanel QLabel.senseNumber {{
+            color: {t['secondary']}; font-size: 10px; font-weight: 600; }}
+        #referencePanel QLabel.muted, #referencePanel QLabel.pronunciation,
+        #referencePanel QLabel.partOfSpeech {{ color: {t['secondary']}; }}
+        #referencePanel QLabel.example {{ color: {t['secondary']}; font-style: italic; }}
+        #referencePanel QPushButton.wordChip {{ color: {t['link']}; padding: 3px 8px; }}
+        #referencePanel QPushButton.suggestion {{ text-align: left; }}
         #toolbarRibbon {{ background: {t['toolbar']}; border-right: 1px solid {t['border']}; }}
         #toolbarRibbon QToolButton {{ background: transparent; border: none; padding: 0; }}
         #toolbarRibbon QToolButton:hover {{ background: {t['hover']}; }}
