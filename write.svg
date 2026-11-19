@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Soft outer drop shadow -->
+    <filter id="key-shadow" x="-15%" y="-15%" width="130%" height="135%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0d0b09" flood-opacity="0.32" />
+    </filter>
+
+    <!-- Brushed metallic silver/nickel rim gradient -->
+    <linearGradient id="metal-rim" x1="15%" y1="10%" x2="85%" y2="90%">
+      <stop offset="0%" stop-color="#f7f4ef" />
+      <stop offset="22%" stop-color="#d2cbc0" />
+      <stop offset="50%" stop-color="#8c8376" />
+      <stop offset="78%" stop-color="#dfd9cf" />
+      <stop offset="100%" stop-color="#696156" />
+    </linearGradient>
+
+    <!-- Inner bezel bevel gradient (inverted for recessed depth) -->
+    <linearGradient id="metal-bevel" x1="15%" y1="10%" x2="85%" y2="90%">
+      <stop offset="0%" stop-color="#544d44" />
+      <stop offset="45%" stop-color="#8e8579" />
+      <stop offset="100%" stop-color="#ebe6de" />
+    </linearGradient>
+
+    <!-- Deep obsidian / vintage bakelite keycap face -->
+    <radialGradient id="key-face" cx="42%" cy="35%" r="68%">
+      <stop offset="0%" stop-color="#35312d" />
+      <stop offset="65%" stop-color="#1e1b18" />
+      <stop offset="100%" stop-color="#110f0d" />
+    </radialGradient>
+
+    <!-- Subtle top-left glass specular highlight -->
+    <linearGradient id="glass-glint" x1="20%" y1="10%" x2="70%" y2="85%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22" />
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.04" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.0" />
+    </linearGradient>
+
+    <!-- Warm antique ivory fill for the "W" -->
+    <linearGradient id="ivory-letter" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fcfaf5" />
+      <stop offset="100%" stop-color="#e3dac9" />
+    </linearGradient>
+  </defs>
+
+  <!-- Main Key Assembly -->
+  <g filter="url(#key-shadow)">
+    <!-- Outer Metallic Ring -->
+    <circle cx="256" cy="256" r="224" fill="url(#metal-rim)" />
+
+    <!-- Subtle outer rim hairline highlight -->
+    <circle cx="256" cy="256" r="223" fill="none" stroke="#ffffff" stroke-opacity="0.45" stroke-width="2" />
+
+    <!-- Recessed Inner Bezel -->
+    <circle cx="256" cy="256" r="196" fill="url(#metal-bevel)" />
+
+    <!-- Keycap Face -->
+    <circle cx="256" cy="256" r="186" fill="url(#key-face)" />
+
+    <!-- Fine Vintage Double-Rule Pinstripe -->
+    <circle cx="256" cy="256" r="165" fill="none" stroke="#d8ceb8" stroke-opacity="0.26" stroke-width="2" />
+    <circle cx="256" cy="256" r="159" fill="none" stroke="#d8ceb8" stroke-opacity="0.12" stroke-width="1" />
+
+    <!-- Crisp Typewriter Serif "W" (Vector Path for Universal Font Rendering) -->
+    <!-- Slight dark deboss shadow underneath -->
+    <path d="M 149 183 H 197 V 196 H 184 L 213 295 L 245 203 H 267 L 299 295 L 328 196 H 315 V 183 H 363 V 196 H 348 L 308 331 H 289 L 256 237 L 223 331 H 204 L 164 196 H 149 Z" fill="#090807" opacity="0.65" transform="translate(0, 3)" />
+
+    <!-- Primary Ivory Letterform -->
+    <path d="M 149 183 H 197 V 196 H 184 L 213 295 L 245 203 H 267 L 299 295 L 328 196 H 315 V 183 H 363 V 196 H 348 L 308 331 H 289 L 256 237 L 223 331 H 204 L 164 196 H 149 Z" fill="url(#ivory-letter)" />
+
+    <!-- Glass Cap Convex Sheen -->
+    <ellipse cx="226" cy="176" rx="134" ry="86" transform="rotate(-24 226 176)" fill="url(#glass-glint)" />
+  </g>
+</svg>

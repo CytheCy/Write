@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Write
+Comment=Edit Markdown and text notes
+Exec=write-app %f
+Icon=write
+Terminal=false
+Categories=Utility;TextEditor;
+MimeType=text/plain;text/markdown;
