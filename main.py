@@ -57,6 +57,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QSpinBox,
     QSplitter,
+    QStackedWidget,
     QTextEdit,
     QToolButton,
     QToolTip,
@@ -1686,14 +1687,36 @@ class MainWindow(QMainWindow):
             self.scratchpad_editor.document(), self.theme, self.scratchpad_editor)
         self.scratchpad_editor.sourceChanged.connect(self.on_scratchpad_changed)
         scratch_layout.addWidget(self.scratchpad_editor)
+        self.left_panels = QStackedWidget()
+        self.left_panels.setObjectName("leftPanels")
+        self.left_panels.setMinimumWidth(180)
+        self.left_panels.addWidget(self.scratchpad_panel)
+        self.reference_panels = {}
+        for name in ("Dictionary", "Thesaurus", "Moby Thesaurus"):
+            panel = QWidget()
+            panel.setAccessibleName(name)
+            reference_layout = QVBoxLayout(panel)
+            reference_layout.setContentsMargins(10, 12, 10, 10)
+            header = QHBoxLayout()
+            header.addWidget(QLabel(name), 1)
+            close_button = BoxIconButton("x", panel)
+            close_button.setFixedSize(28, 28)
+            close_button.setAccessibleName(f"Close {name}")
+            close_button.setToolTip(f"Close {name}")
+            close_button.clicked.connect(self.close_left_panel)
+            header.addWidget(close_button)
+            reference_layout.addLayout(header)
+            reference_layout.addStretch(1)
+            self.left_panels.addWidget(panel)
+            self.reference_panels[name] = panel
         self.workspace_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.workspace_splitter.setChildrenCollapsible(False)
-        self.workspace_splitter.addWidget(self.scratchpad_panel)
+        self.workspace_splitter.addWidget(self.left_panels)
         self.workspace_splitter.addWidget(self.content_splitter)
         self.workspace_splitter.setStretchFactor(0, 0)
         self.workspace_splitter.setStretchFactor(1, 1)
         self.workspace_splitter.setSizes([280, 840])
-        self.scratchpad_panel.hide()
+        self.left_panels.hide()
         self.content_layout.addWidget(self.workspace_splitter, 1)
         root_layout.addWidget(self.content_row, 1)
         self.heading_panel.hide()
@@ -2119,6 +2142,26 @@ class MainWindow(QMainWindow):
         notepad_button.toggled.connect(self.toggle_scratchpad)
         layout.addWidget(notepad_button)
         self.ribbon_buttons["Scatchpad"] = notepad_button
+
+        sort_button = BoxIconButton("sort-a-z", self.ribbon)
+        sort_button.setFixedSize(36, 36)
+        sort_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        sort_button.setAccessibleName("Sort A–Z")
+        sort_button.setToolTip("Sort A–Z")
+        layout.addWidget(sort_button)
+        self.ribbon_buttons["Sort A–Z"] = sort_button
+        self.reference_menu = QMenu(self)
+        self.reference_menu.setAccessibleName("Writing references")
+        for name in self.reference_panels:
+            action = self.reference_menu.addAction(name)
+            action.triggered.connect(
+                lambda checked=False, selected=name: self.open_reference_panel(selected))
+        sort_button.clicked.connect(self.show_reference_menu)
+        self.reference_menu_hide_timer = QTimer(self)
+        self.reference_menu_hide_timer.setSingleShot(True)
+        self.reference_menu_hide_timer.setInterval(150)
+        self.reference_menu_hide_timer.timeout.connect(self.dismiss_reference_menu_if_outside)
+        self.reference_menu.aboutToHide.connect(self.reference_menu_hide_timer.stop)
         layout.addStretch(1)
         self.ribbon_reveal = QWidget()
         self.ribbon_reveal.setObjectName("ribbonReveal")
@@ -2212,6 +2255,34 @@ class MainWindow(QMainWindow):
         anchor.setX(anchor.x() - menu.sizeHint().width() + 1)
         anchor.setY(anchor.y() + 1)
         menu.popup(anchor)
+
+    def show_reference_menu(self):
+        button = self.ribbon_buttons["Sort A–Z"]
+        if not button.isVisible() or QApplication.activePopupWidget():
+            return
+        anchor = button.mapToGlobal(button.rect().topRight())
+        anchor.setX(anchor.x() + 1)
+        self.reference_menu.popup(anchor)
+
+    def dismiss_reference_menu_if_outside(self):
+        cursor = QCursor.pos()
+        if not any(widget.rect().contains(widget.mapFromGlobal(cursor))
+                   for widget in (self.reference_menu, self.ribbon_buttons["Sort A–Z"])):
+            self.reference_menu.close()
+
+    def handle_reference_menu_event(self, watched, event):
+        button = self.ribbon_buttons["Sort A–Z"]
+        event_type = event.type()
+        if watched is button:
+            if event_type == QEvent.Type.Enter and self.isActiveWindow():
+                self.show_reference_menu()
+            elif event_type == QEvent.Type.Hide:
+                self.reference_menu.close()
+        if self.reference_menu.isVisible() and not self.reference_menu_hide_timer.isActive():
+            if ((watched in (button, self.reference_menu) and event_type == QEvent.Type.Leave)
+                    or (watched is self.reference_menu and event_type == QEvent.Type.MouseMove
+                        and not self.reference_menu.rect().contains(event.position().toPoint()))):
+                self.reference_menu_hide_timer.start()
 
     def dismiss_heading_controls_if_outside(self):
         cursor = QCursor.pos()
@@ -2704,6 +2775,7 @@ class MainWindow(QMainWindow):
     def eventFilter(self, watched, event):  # noqa: N802
         if hasattr(self, "ribbon_hide_timer"):
             self.handle_ribbon_event(watched, event)
+            self.handle_reference_menu_event(watched, event)
         if hasattr(self, "heading_button"):
             self.handle_heading_panel_event(watched, event)
         popup = getattr(self, "document_path_popup", None)
@@ -2812,11 +2884,24 @@ class MainWindow(QMainWindow):
         return self.open_file(self.current_file)
 
     def toggle_scratchpad(self, visible):
-        self.scratchpad_panel.setVisible(visible)
         if visible:
+            self.left_panels.setCurrentWidget(self.scratchpad_panel)
+            self.left_panels.show()
             self.scratchpad_editor.setFocus()
         else:
+            self.left_panels.hide()
             self.editor.setFocus()
+
+    def open_reference_panel(self, name):
+        button = self.ribbon_buttons["Scatchpad"]
+        button.setChecked(False)
+        self.left_panels.setCurrentWidget(self.reference_panels[name])
+        self.left_panels.show()
+
+    def close_left_panel(self):
+        self.ribbon_buttons["Scatchpad"].setChecked(False)
+        self.left_panels.hide()
+        self.editor.setFocus()
 
     def on_scratchpad_changed(self):
         if not self.loading:

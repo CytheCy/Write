@@ -31,19 +31,69 @@ class RibbonTests(unittest.TestCase):
         QTest.mouseMove(self.window.editor.viewport(), QPoint(200, 150))
 
     def tearDown(self):
+        self.window.reference_menu.close()
         self.window._saved_text = self.window.editor.toPlainText()
         self.window.close()
         self.window.deleteLater()
         self.app.processEvents()
 
-    def test_ribbon_is_left_and_shows_only_scatchpad(self):
+    def test_ribbon_is_left_and_shows_scatchpad_and_sort(self):
         w = self.window
         self.assertTrue(w.ribbon.isVisible())
         self.assertLess(w.ribbon.mapTo(w, QPoint()).x(), w.editor.mapTo(w, QPoint()).x())
         buttons = w.ribbon.findChildren(QToolButton)
-        self.assertEqual(len(buttons), 1)
+        self.assertEqual(len(buttons), 2)
         self.assertEqual(buttons[0].icon_name, 'notepad')
         self.assertEqual(buttons[0].accessibleName(), 'Scatchpad')
+        self.assertEqual(buttons[1].icon_name, 'sort-a-z')
+        self.assertEqual(buttons[1].accessibleName(), 'Sort A–Z')
+
+    def test_reference_hover_menu_opens_each_left_panel(self):
+        w = self.window
+        self.assertEqual([action.text() for action in w.reference_menu.actions()],
+                         ['Dictionary', 'Thesaurus', 'Moby Thesaurus'])
+        for action in w.reference_menu.actions():
+            with self.subTest(panel=action.text()):
+                QTest.mouseMove(w.editor.viewport(), QPoint(200, 150))
+                QTest.mouseMove(w.ribbon_buttons['Sort A–Z'])
+                self.app.processEvents()
+                self.assertTrue(w.reference_menu.isVisible())
+                QTest.mouseMove(w.reference_menu, w.reference_menu.actionGeometry(action).center())
+                QTest.mouseClick(w.reference_menu, Qt.MouseButton.LeftButton,
+                                 pos=w.reference_menu.actionGeometry(action).center())
+                self.app.processEvents()
+                panel = w.reference_panels[action.text()]
+                self.assertFalse(w.reference_menu.isVisible())
+                self.assertTrue(panel.isVisible())
+                self.assertLess(panel.mapTo(w, QPoint()).x(), w.editor.mapTo(w, QPoint()).x())
+                self.assertEqual([name for name, p in w.reference_panels.items() if p.isVisible()],
+                                 [action.text()])
+                panel.findChild(QToolButton).click()
+                self.assertFalse(w.left_panels.isVisible())
+
+    def test_reference_menu_dismisses_after_pointer_leaves(self):
+        w = self.window
+        QTest.mouseMove(w.ribbon_buttons['Sort A–Z'])
+        self.app.processEvents()
+        self.assertTrue(w.reference_menu.isVisible())
+        QTest.mouseMove(w.reference_menu, QPoint(w.reference_menu.width() + 100, 10))
+        QTest.qWait(250)
+        self.assertFalse(w.reference_menu.isVisible())
+
+    def test_switching_reference_and_scratchpad_preserves_notes(self):
+        w = self.window
+        w.ribbon_buttons['Scatchpad'].click()
+        w.scratchpad_editor.setPlainText('Keep these notes')
+        source = w.document_source()
+        w.open_reference_panel('Dictionary')
+        self.assertFalse(w.scratchpad_panel.isVisible())
+        self.assertFalse(w.ribbon_buttons['Scatchpad'].isChecked())
+        w.ribbon_buttons['Scatchpad'].click()
+        self.assertTrue(w.scratchpad_panel.isVisible())
+        self.assertFalse(w.reference_panels['Dictionary'].isVisible())
+        self.assertEqual(w.scratchpad_editor.toPlainText(), 'Keep these notes')
+        self.assertEqual(w.document_source(), source)
+        w.scratchpad_editor.clear()
 
     def reveal_ribbon(self):
         QTest.mouseMove(self.window.ribbon_reveal, QPoint(3, 100))

@@ -127,7 +127,7 @@ def stylesheet(t):
             background: {t['editor']}; color: {t['text']};
             selection-background-color: {t['selection']}; selection-color: {t['selection_text']}; }}
         #editor {{ border: none; }}
-        #headingPanel, #scratchpadPanel {{ background: {t['sidebar']}; }}
+        #headingPanel, #scratchpadPanel, #leftPanels {{ background: {t['sidebar']}; }}
         #scratchpadEditor {{ border: none; }}
         #toolbarRibbon {{ background: {t['toolbar']}; border-right: 1px solid {t['border']}; }}
         #toolbarRibbon QToolButton {{ background: transparent; border: none; padding: 0; }}
