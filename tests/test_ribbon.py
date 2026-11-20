@@ -3,9 +3,11 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from PySide6.QtCore import QAbstractAnimation, QPoint, QSettings, Qt
 from PySide6.QtTest import QTest
+from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import QApplication, QToolButton
 
 from main import MainWindow
@@ -31,54 +33,168 @@ class RibbonTests(unittest.TestCase):
         QTest.mouseMove(self.window.editor.viewport(), QPoint(200, 150))
 
     def tearDown(self):
-        self.window.reference_menu.close()
         self.window._saved_text = self.window.editor.toPlainText()
         self.window.close()
         self.window.deleteLater()
         self.app.processEvents()
 
-    def test_ribbon_is_left_and_shows_scatchpad_and_sort(self):
+    def test_ribbon_is_left_and_shows_scratchpad_and_references(self):
         w = self.window
         self.assertTrue(w.ribbon.isVisible())
         self.assertLess(w.ribbon.mapTo(w, QPoint()).x(), w.editor.mapTo(w, QPoint()).x())
         buttons = w.ribbon.findChildren(QToolButton)
-        self.assertEqual(len(buttons), 2)
+        self.assertEqual(len(buttons), 4)
         self.assertEqual(buttons[0].icon_name, 'notepad')
         self.assertEqual(buttons[0].accessibleName(), 'Scatchpad')
         self.assertEqual(buttons[1].icon_name, 'sort-a-z')
-        self.assertEqual(buttons[1].accessibleName(), 'Sort A–Z')
+        self.assertEqual(buttons[1].accessibleName(), 'Dictionary')
+        self.assertEqual(buttons[2].icon_name, 'thesaurus')
+        self.assertEqual(buttons[2].accessibleName(), 'Thesaurus')
+        self.assertGreater(buttons[2].y(), buttons[1].y())
+        self.assertEqual(buttons[3].icon_name, 'whale')
+        self.assertEqual(buttons[3].accessibleName(), 'Moby Thesaurus')
+        self.assertGreater(buttons[3].y(), buttons[2].y())
 
-    def test_reference_hover_menu_opens_each_left_panel(self):
+    def test_reference_icons_toggle_and_switch_left_panels(self):
         w = self.window
-        self.assertEqual([action.text() for action in w.reference_menu.actions()],
-                         ['Dictionary', 'Thesaurus', 'Moby Thesaurus'])
-        for action in w.reference_menu.actions():
-            with self.subTest(panel=action.text()):
-                QTest.mouseMove(w.editor.viewport(), QPoint(200, 150))
-                QTest.mouseMove(w.ribbon_buttons['Sort A–Z'])
+        for name, panel in w.reference_panels.items():
+            with self.subTest(panel=name):
+                button = w.ribbon_buttons[name]
+                QTest.mouseClick(button, Qt.MouseButton.LeftButton)
                 self.app.processEvents()
-                self.assertTrue(w.reference_menu.isVisible())
-                QTest.mouseMove(w.reference_menu, w.reference_menu.actionGeometry(action).center())
-                QTest.mouseClick(w.reference_menu, Qt.MouseButton.LeftButton,
-                                 pos=w.reference_menu.actionGeometry(action).center())
-                self.app.processEvents()
-                panel = w.reference_panels[action.text()]
-                self.assertFalse(w.reference_menu.isVisible())
                 self.assertTrue(panel.isVisible())
                 self.assertLess(panel.mapTo(w, QPoint()).x(), w.editor.mapTo(w, QPoint()).x())
-                self.assertEqual([name for name, p in w.reference_panels.items() if p.isVisible()],
-                                 [action.text()])
-                panel.findChild(QToolButton).click()
+                self.assertEqual([key for key, p in w.reference_panels.items() if p.isVisible()],
+                                 [name])
+                QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+                self.assertFalse(w.left_panels.isVisible())
+                self.assertTrue(w.editor.hasFocus())
+                QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+                self.assertTrue(panel.isVisible())
+        w.close_left_panel()
+
+    def test_hovering_reference_icons_does_not_open_popup_or_panel(self):
+        w = self.window
+        for name in w.reference_panels:
+            with self.subTest(panel=name):
+                QTest.mouseMove(w.ribbon_buttons[name])
+                self.app.processEvents()
+                self.assertIsNone(QApplication.activePopupWidget())
                 self.assertFalse(w.left_panels.isVisible())
 
-    def test_reference_menu_dismisses_after_pointer_leaves(self):
+    def test_reference_icons_search_selection_only_when_opening(self):
         w = self.window
-        QTest.mouseMove(w.ribbon_buttons['Sort A–Z'])
+        w.editor.setPlainText('  calm\nwaters  ')
+        w.editor.selectAll()
+        for name, panel in w.reference_panels.items():
+            with self.subTest(panel=name):
+                with patch.object(w.reference_tools, 'search') as search:
+                    QTest.mouseClick(w.ribbon_buttons[name], Qt.MouseButton.LeftButton)
+                    self.app.processEvents()
+                    search.assert_called_once_with('calm waters')
+                    self.assertTrue(panel.isVisible())
+                    self.assertEqual(w.editor.textCursor().selectedText(), '  calm\u2029waters  ')
+                    search.reset_mock()
+                    QTest.mouseClick(w.ribbon_buttons[name], Qt.MouseButton.LeftButton)
+                    search.assert_not_called()
+                    self.assertFalse(w.left_panels.isVisible())
+
+    def test_reference_close_button_allows_reopening_from_icon(self):
+        w = self.window
+        for name, panel in w.reference_panels.items():
+            with self.subTest(panel=name):
+                w.ribbon_buttons[name].click()
+                panel.findChild(QToolButton).click()
+                self.assertFalse(w.left_panels.isVisible())
+                w.ribbon_buttons[name].click()
+                self.assertTrue(panel.isVisible())
+                w.close_left_panel()
+
+    def test_open_reference_without_selection_keeps_existing_search(self):
+        w = self.window
+        w.editor.setPlainText('calm')
+        w.editor.moveCursor(QTextCursor.MoveOperation.End)
+        for name, panel in w.reference_panels.items():
+            with self.subTest(panel=name):
+                panel.search_input.setText('previous')
+                with patch.object(w.reference_tools, 'search') as search:
+                    w.open_reference_panel(name)
+                    search.assert_not_called()
+                self.assertEqual(panel.search_input.text(), 'previous')
+
+    def test_open_reference_ignores_whitespace_selection(self):
+        w = self.window
+        w.editor.setPlainText(' \n ')
+        w.editor.selectAll()
+        with patch.object(w.reference_tools, 'search') as search:
+            w.open_reference_panel('Dictionary')
+            search.assert_not_called()
+
+    def hover_character(self, offset, fraction=0.5):
+        editor = self.window.editor
         self.app.processEvents()
-        self.assertTrue(w.reference_menu.isVisible())
-        QTest.mouseMove(w.reference_menu, QPoint(w.reference_menu.width() + 100, 10))
-        QTest.qWait(250)
-        self.assertFalse(w.reference_menu.isVisible())
+        cursor = QTextCursor(editor.document())
+        cursor.setPosition(offset)
+        rect = editor.cursorRect(cursor)
+        cursor.movePosition(QTextCursor.MoveOperation.NextCharacter)
+        end = editor.cursorRect(cursor)
+        position = QPoint(int(rect.left() + (end.left() - rect.left()) * fraction),
+                          rect.center().y())
+        QTest.mouseMove(editor.viewport(), position)
+        self.app.processEvents()
+
+    def test_ctrl_l_searches_hovered_word_and_preserves_selection(self):
+        w = self.window
+        w.editor.setPlainText('Selected text, peaceful waters.')
+        w.editor.selectAll()
+        original = w.editor.textCursor()
+        for offset, fraction in ((15, 0.2), (19, 0.8), (22, 0.8)):
+            with self.subTest(offset=offset):
+                w.close_left_panel()
+                self.hover_character(offset, fraction)
+                with patch.object(w.reference_tools, 'search') as search:
+                    QTest.keyClick(w.editor, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
+                    self.app.processEvents()
+                    search.assert_called_once_with('peaceful')
+                self.assertTrue(w.reference_panels['Dictionary'].isVisible())
+                self.assertEqual(w.editor.textCursor().position(), original.position())
+                self.assertEqual(w.editor.textCursor().anchor(), original.anchor())
+                self.assertEqual(w.editor.toPlainText(), 'Selected text, peaceful waters.')
+
+    def test_ctrl_l_ignores_whitespace_punctuation_and_outside_document(self):
+        w = self.window
+        w.editor.setPlainText('calm, waters')
+        w.editor.setFocus()
+        for offset in (4, 5):
+            with self.subTest(offset=offset):
+                self.hover_character(offset)
+                with patch.object(w.reference_tools, 'search') as search:
+                    QTest.keyClick(w.editor, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
+                    search.assert_not_called()
+                self.assertFalse(w.left_panels.isVisible())
+        viewport = w.editor.viewport()
+        for position in (QPoint(viewport.width() - 5, 5),
+                         QPoint(100, viewport.height() - 10)):
+            QTest.mouseMove(viewport, position)
+            with patch.object(w.reference_tools, 'search') as search:
+                QTest.keyClick(w.editor, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
+                search.assert_not_called()
+        QTest.mouseMove(w.ribbon_buttons['Scatchpad'])
+        with patch.object(w.reference_tools, 'search') as search:
+            QTest.keyClick(w.editor, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
+            search.assert_not_called()
+
+    def test_ctrl_l_resolves_word_after_scrolling(self):
+        w = self.window
+        w.editor.setPlainText('earlier lines\n' * 100 + 'peaceful waters')
+        w.editor.moveCursor(QTextCursor.MoveOperation.End)
+        w.editor.ensureCursorVisible()
+        self.app.processEvents()
+        self.assertGreater(w.editor.verticalScrollBar().value(), 0)
+        self.hover_character(len('earlier lines\n' * 100) + 3)
+        with patch.object(w.reference_tools, 'search') as search:
+            QTest.keyClick(w.editor, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
+            search.assert_called_once_with('peaceful')
 
     def test_switching_reference_and_scratchpad_preserves_notes(self):
         w = self.window

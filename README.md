@@ -89,7 +89,9 @@ Where are we?
 
 You can also open the panel and write notes to create the block when saving. Plain text (`.txt`) files display their existing contents literally.
 
-Hover over the **Sort A–Z** ribbon icon to open a menu with **Dictionary**, **Thesaurus**, and **Moby Thesaurus**. Click an item to open its panel on the left; use its close button to dismiss it. Enter a word and press **Enter** or **Search** to look it up in all three sources, then switch panels to compare results. Dictionary shows Merriam-Webster Collegiate definitions, pronunciation, examples, and word history. Thesaurus shows meanings, synonyms, and antonyms. Moby Thesaurus shows its full list of related words without an API key. Click a suggestion or related word to search again.
+Click the **Dictionary** (A–Z), **Thesaurus**, or **Moby Thesaurus** (whale) ribbon icon to open its panel on the left. Click the same icon again to close the panel, or click another reference icon to switch panels. You can also use the panel’s close button. If text is selected in your document, opening a panel automatically searches for that text in all three sources. You can also enter a word and press **Enter** or **Search** to look it up in all three sources, then switch panels to compare results. Dictionary shows Merriam-Webster Collegiate definitions, pronunciation, examples, and word history. Thesaurus shows meanings, synonyms, and antonyms. Moby Thesaurus shows its full list of related words without an API key. Click a suggestion or related word to search again.
+
+Hover over a word in the document and press **Ctrl+L** to open Dictionary and search for that word. Your text selection and caret stay in place. Hovering over empty space does nothing.
 
 Choose **Settings → Reference API key files…** (or **API key files…** in a panel) to select the `.txt` files containing your Merriam-Webster Collegiate Dictionary and Thesaurus keys. Only file paths are saved; keys are read when searching. Lookups require an internet connection. Switching back to Scatchpad preserves your scratch notes.
 

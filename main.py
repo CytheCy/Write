@@ -167,7 +167,9 @@ def kde_open_file(start: Path) -> tuple[bool, str]:
 def boxicon(name: str, color: str) -> QSvgRenderer:
     """Load a bundled Boxicons SVG with the current theme color."""
     source = (Path(__file__).resolve().parent / "boxicons" / f"bx-{name}.svg").read_text()
-    source = source.replace("<svg ", f'<svg fill="{color}" ', 1)
+    source = source.replace('currentColor', color)
+    if not re.search(r'\bfill\s*=', source.split('>', 1)[0]):
+        source = source.replace("<svg ", f'<svg fill="{color}" ', 1)
     return QSvgRenderer(source.encode())
 
 
@@ -2007,6 +2009,11 @@ class MainWindow(QMainWindow):
         replace_action.triggered.connect(self.open_replace)
         menu.addAction(replace_action)
         self.addAction(replace_action)
+        dictionary_action = QAction("Look Up Hovered Word", self)
+        dictionary_action.setShortcut(QKeySequence("Ctrl+L"))
+        dictionary_action.triggered.connect(self.lookup_hovered_word)
+        menu.addAction(dictionary_action)
+        self.addAction(dictionary_action)
         menu.addSeparator()
         cleanup_action = QAction("Remove Extra Spaces and ↵", self)
         cleanup_action.setShortcut(QKeySequence("Ctrl+\\"))
@@ -2141,25 +2148,18 @@ class MainWindow(QMainWindow):
         layout.addWidget(notepad_button)
         self.ribbon_buttons["Scatchpad"] = notepad_button
 
-        sort_button = BoxIconButton("sort-a-z", self.ribbon)
-        sort_button.setFixedSize(36, 36)
-        sort_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        sort_button.setAccessibleName("Sort A–Z")
-        sort_button.setToolTip("Sort A–Z")
-        layout.addWidget(sort_button)
-        self.ribbon_buttons["Sort A–Z"] = sort_button
-        self.reference_menu = QMenu(self)
-        self.reference_menu.setAccessibleName("Writing references")
-        for name in self.reference_panels:
-            action = self.reference_menu.addAction(name)
-            action.triggered.connect(
-                lambda checked=False, selected=name: self.open_reference_panel(selected))
-        sort_button.clicked.connect(self.show_reference_menu)
-        self.reference_menu_hide_timer = QTimer(self)
-        self.reference_menu_hide_timer.setSingleShot(True)
-        self.reference_menu_hide_timer.setInterval(150)
-        self.reference_menu_hide_timer.timeout.connect(self.dismiss_reference_menu_if_outside)
-        self.reference_menu.aboutToHide.connect(self.reference_menu_hide_timer.stop)
+        for name, icon in (("Dictionary", "sort-a-z"),
+                           ("Thesaurus", "thesaurus"),
+                           ("Moby Thesaurus", "whale")):
+            button = BoxIconButton(icon, self.ribbon)
+            button.setFixedSize(36, 36)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            button.setAccessibleName(name)
+            button.setToolTip(name)
+            button.clicked.connect(
+                lambda checked=False, selected=name: self.toggle_reference_panel(selected))
+            layout.addWidget(button)
+            self.ribbon_buttons[name] = button
         layout.addStretch(1)
         self.ribbon_reveal = QWidget()
         self.ribbon_reveal.setObjectName("ribbonReveal")
@@ -2253,34 +2253,6 @@ class MainWindow(QMainWindow):
         anchor.setX(anchor.x() - menu.sizeHint().width() + 1)
         anchor.setY(anchor.y() + 1)
         menu.popup(anchor)
-
-    def show_reference_menu(self):
-        button = self.ribbon_buttons["Sort A–Z"]
-        if not button.isVisible() or QApplication.activePopupWidget():
-            return
-        anchor = button.mapToGlobal(button.rect().topRight())
-        anchor.setX(anchor.x() + 1)
-        self.reference_menu.popup(anchor)
-
-    def dismiss_reference_menu_if_outside(self):
-        cursor = QCursor.pos()
-        if not any(widget.rect().contains(widget.mapFromGlobal(cursor))
-                   for widget in (self.reference_menu, self.ribbon_buttons["Sort A–Z"])):
-            self.reference_menu.close()
-
-    def handle_reference_menu_event(self, watched, event):
-        button = self.ribbon_buttons["Sort A–Z"]
-        event_type = event.type()
-        if watched is button:
-            if event_type == QEvent.Type.Enter and self.isActiveWindow():
-                self.show_reference_menu()
-            elif event_type == QEvent.Type.Hide:
-                self.reference_menu.close()
-        if self.reference_menu.isVisible() and not self.reference_menu_hide_timer.isActive():
-            if ((watched in (button, self.reference_menu) and event_type == QEvent.Type.Leave)
-                    or (watched is self.reference_menu and event_type == QEvent.Type.MouseMove
-                        and not self.reference_menu.rect().contains(event.position().toPoint()))):
-                self.reference_menu_hide_timer.start()
 
     def dismiss_heading_controls_if_outside(self):
         cursor = QCursor.pos()
@@ -2773,7 +2745,6 @@ class MainWindow(QMainWindow):
     def eventFilter(self, watched, event):  # noqa: N802
         if hasattr(self, "ribbon_hide_timer"):
             self.handle_ribbon_event(watched, event)
-            self.handle_reference_menu_event(watched, event)
         if hasattr(self, "heading_button"):
             self.handle_heading_panel_event(watched, event)
         popup = getattr(self, "document_path_popup", None)
@@ -2811,8 +2782,11 @@ class MainWindow(QMainWindow):
                 and watched.window() is self):
             # Blank margins and other non-focusable widgets otherwise leave
             # QTextEdit focused, with its caret still blinking in the note.
+            # Reference buttons need the selection for their lookup.
             if (watched is not self.editor.viewport()
-                    and not self.editor.viewport().isAncestorOf(watched)):
+                    and not self.editor.viewport().isAncestorOf(watched)
+                    and watched not in (self.ribbon_buttons[name]
+                                        for name in self.reference_panels)):
                 self.editor.dismiss_cursor()
             if not self.isMaximized():
                 point = self.mapFromGlobal(event.globalPosition().toPoint())
@@ -2890,12 +2864,52 @@ class MainWindow(QMainWindow):
             self.left_panels.hide()
             self.editor.setFocus()
 
-    def open_reference_panel(self, name):
+    def lookup_hovered_word(self):
+        viewport = self.editor.viewport()
+        position = viewport.mapFromGlobal(QCursor.pos())
+        if not viewport.rect().contains(position):
+            return
+        cursor = self.editor.cursorForPosition(position)
+        rect = self.editor.cursorRect(cursor)
+        if not rect.top() <= position.y() <= rect.bottom():
+            return
+        # cursorForPosition returns the nearest insertion point. Resolve the
+        # character on its left when hovering over the right half of a glyph.
+        if position.x() < rect.left():
+            cursor.movePosition(QTextCursor.MoveOperation.PreviousCharacter)
+        start = self.editor.cursorRect(cursor)
+        character = QTextCursor(cursor)
+        character.movePosition(QTextCursor.MoveOperation.NextCharacter,
+                               QTextCursor.MoveMode.KeepAnchor)
+        end = self.editor.cursorRect(character)
+        right = (end.left() if end.top() == start.top() else
+                 start.left() + self.editor.fontMetrics().horizontalAdvance(character.selectedText()))
+        if not start.left() <= position.x() < right:
+            return
+        if not any(char.isalnum() for char in character.selectedText()):
+            return
+        cursor.select(QTextCursor.SelectionType.WordUnderCursor)
+        word = cursor.selectedText().strip()
+        if word:
+            self.open_reference_panel('Dictionary', word=word)
+
+    def toggle_reference_panel(self, name):
+        panel = self.reference_panels[name]
+        if self.left_panels.isVisible() and self.left_panels.currentWidget() is panel:
+            self.close_left_panel()
+        else:
+            self.open_reference_panel(name)
+
+    def open_reference_panel(self, name, *, word=None):
+        if word is None:
+            word = self.editor.textCursor().selectedText().replace('\u2029', ' ').strip()
         button = self.ribbon_buttons["Scatchpad"]
         button.setChecked(False)
         panel = self.reference_panels[name]
         self.left_panels.setCurrentWidget(panel)
         self.left_panels.show()
+        if word:
+            self.reference_tools.search(word)
         panel.search_input.setFocus()
         panel.search_input.selectAll()
 
