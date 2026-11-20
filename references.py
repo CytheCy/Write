@@ -99,8 +99,8 @@ class ReferenceTools(QObject):
         self.generation = 0
         self.panels = {name: ReferencePanel(name, self) for name in SOURCES}
 
-    def show_settings(self):
-        dialog = QDialog(self.parent())
+    def show_settings(self, *, parent=None):
+        dialog = QDialog(parent or self.parent())
         dialog.setWindowTitle('Reference API key files')
         dialog.resize(560, 280)
         layout = QVBoxLayout(dialog)

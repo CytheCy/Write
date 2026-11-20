@@ -20,7 +20,7 @@ The bundled `write.svg` is the app's typewriter-key W icon. Both the source
 installer and RPM install it as `write` in the hicolor icon theme; the app and
 update installer also load the bundled SVG directly for their window icons.
 
-Once installed from an RPM, open **Settings → Updates…** to check GitHub Releases.
+Once installed from an RPM, open **Settings → Updates** to check GitHub Releases.
 Write downloads the matching RPM only when you select **Install Update**, verifies
 its SHA-256 checksum and RPM signature against the bundled release key, then asks
 Polkit for authorization to run a DNF5 upgrade. Save or discard any unsaved note
@@ -93,29 +93,31 @@ Click the **Dictionary** (A–Z), **Thesaurus**, or **Moby Thesaurus** (whale) r
 
 Hover over a word in the document and press **Ctrl+L** to open Dictionary and search for that word. Your text selection and caret stay in place. Hovering over empty space does nothing.
 
-Choose **Settings → Reference API key files…** (or **API key files…** in a panel) to select the `.txt` files containing your Merriam-Webster Collegiate Dictionary and Thesaurus keys. Only file paths are saved; keys are read when searching. Lookups require an internet connection. Switching back to Scatchpad preserves your scratch notes.
+Click the **Settings** gear at the bottom of the left ribbon to open a settings window with **Themes**, **Appearance**, **Shortcut Keys**, **Updates**, and **General** tabs. Appearance includes font size, paragraph spacing, page width, and panel visibility. Shortcut Keys lists the available keyboard shortcuts.
 
-Enable **Settings → Auto-hide toolbar ribbon** to hide it while writing. Move the pointer to the left edge of the document area to reveal it in 0.3 seconds. Like the right heading panel, it waits five seconds after the pointer leaves before sliding closed in about three quarters of a second. Returning to the ribbon cancels the countdown. Disable the option to keep the ribbon visible. Your choice is remembered across restarts.
+Open **Settings → General** to select the `.txt` files containing your Merriam-Webster Collegiate Dictionary and Thesaurus keys directly on the tab. Each file selector shows the saved location and whether the file exists. You can also use **API key files…** in a reference panel. Only file paths are saved; keys are read when searching. Lookups require an internet connection. Switching back to Scatchpad preserves your scratch notes.
 
-Markdown notes with two or more `#` headings show a heading panel on the right. Hover over the side panel icon immediately left of Minimize and choose **Hide**, **Narrow**, or **Full**. Narrow shows the first three characters of each heading. Full shows more of each heading and lets you drag the divider to adjust its width. With **Auto Hide** enabled, move the pointer to the right edge of the window to reveal the Narrow or Full panel. After the pointer leaves the panel area, the panel stays open for five seconds before sliding closed. Returning to the panel cancels the countdown. The panel slides open or closed in about three quarters of a second. The same controls are available under **Settings → Heading panel**. Your choices and Full width are remembered across restarts. Click a heading to jump to it in the editor. The icon appears only when there are at least two headings. The list updates as you edit and excludes fenced code. Plain text files do not show the panel.
+Enable **Settings → Appearance → Auto-hide toolbar ribbon** to hide it while writing. Move the pointer to the left edge of the document area to reveal it in 0.3 seconds. Like the right heading panel, it waits five seconds after the pointer leaves before sliding closed in about three quarters of a second. Returning to the ribbon cancels the countdown. Disable the option to keep the ribbon visible. Your choice is remembered across restarts.
+
+Markdown notes with two or more `#` headings show a heading panel on the right. Hover over the side panel icon immediately left of Minimize and choose **Hide**, **Narrow**, or **Full**. Narrow shows the first three characters of each heading. Full shows more of each heading and lets you drag the divider to adjust its width. With **Auto Hide** enabled, move the pointer to the right edge of the window to reveal the Narrow or Full panel. After the pointer leaves the panel area, the panel stays open for five seconds before sliding closed. Returning to the panel cancels the countdown. The panel slides open or closed in about three quarters of a second. The same controls are available under **Settings → Appearance → Heading panel**. Your choices and Full width are remembered across restarts. Click a heading to jump to it in the editor. The icon appears only when there are at least two headings. The list updates as you edit and excludes fenced code. Plain text files do not show the panel.
 
 Spell checking is enabled by default and works offline with an English dictionary.
 Misspelled words receive a wavy underline; right-click one for suggestions,
 **Ignore for this session**, or **Add to dictionary**. Added words are remembered
 across restarts. Corrections can be undone with Ctrl+Z. Markdown code, link
 destinations, URLs, and email addresses are skipped. Toggle checking with
-**Settings → Spell check (English)**; this preference is also remembered.
+**Settings → General → Spell check (English)**; this preference is also remembered.
 Existing installations should rerun `bash install.sh` to install the new dependency.
 
 Use **File → Remove Extra Spaces and ↵** (**Ctrl+\\**) to collapse repeated spaces, remove spaces beside newlines, and collapse consecutive line breaks throughout the note. Empty Markdown headings such as `# ` keep one space after the marker. Tabs are preserved. Undo restores the cleanup in one step.
 
 Use **File → Remove Bullets and Numbering** (**Ctrl+/**) to remove Markdown list markers while keeping each item's text. Fenced code and horizontal rules are preserved. Undo restores the markers in one step.
 
-Each newline displays as a paragraph break with extra space after it. Adjust the gap in **Settings → Paragraph spacing…**. This changes the display only; saved files keep their original newlines.
+Each newline displays as a paragraph break with extra space after it. Adjust the gap in **Settings → Appearance → Paragraph spacing**. This changes the display only; saved files keep their original newlines.
 
-Use **Settings → Font size…** to choose a text size from 6 to 72 points. **Ctrl++** (or **Ctrl+=**) increases the size by one point; **Ctrl+-** decreases it. Markdown headings scale with the text. Font size, paragraph spacing, and page width are remembered across restarts.
+Use **Settings → Appearance → Font size** to choose a text size from 6 to 72 points. **Ctrl++** (or **Ctrl+=**) increases the size by one point; **Ctrl+-** decreases it. Markdown headings scale with the text. Font size, paragraph spacing, and page width are remembered across restarts.
 
-Use **Settings → Max Page Width…** to limit the text page width in pixels (950 px by default). Wider windows add margins on both sides to keep the page centered; narrower windows wrap the text to fit. The setting is remembered across restarts. Set it to **Unlimited** (0) to use the full available width.
+Use **Settings → Appearance → Maximum page width** to limit the text page width in pixels (950 px by default). Wider windows add margins on both sides to keep the page centered; narrower windows wrap the text to fit. The setting is remembered across restarts. Set it to **Unlimited** (0) to use the full available width.
 
 Use `Ctrl+N` for a new note, `Ctrl+O` to open a file, `Ctrl+S` to save, and `Ctrl+Shift+S` to save as. Unsaved changes are confirmed before closing or changing files.
 
@@ -124,7 +126,7 @@ On Wayland desktops, Write uses XWayland when available so it can restore the wi
 
 ## Appearance
 
-Choose **Settings → Themes…** for **Catppuccin Mocha**, **Tokyo Night**,
+Choose **Settings → Themes** for **Catppuccin Mocha**, **Tokyo Night**,
 or **Everforest Dark**. Each option has a miniature color preview and a radio
 indicator. Changes apply immediately and save automatically. **System** retains
 the previous light/dark appearance based on desktop colors at launch and remains

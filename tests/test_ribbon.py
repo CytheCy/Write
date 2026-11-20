@@ -3,12 +3,12 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from PySide6.QtCore import QAbstractAnimation, QPoint, QSettings, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtGui import QTextCursor
-from PySide6.QtWidgets import QApplication, QToolButton
+from PySide6.QtWidgets import QApplication, QCheckBox, QRadioButton, QTableWidget, QToolButton
 
 from main import MainWindow
 
@@ -43,17 +43,84 @@ class RibbonTests(unittest.TestCase):
         self.assertTrue(w.ribbon.isVisible())
         self.assertLess(w.ribbon.mapTo(w, QPoint()).x(), w.editor.mapTo(w, QPoint()).x())
         buttons = w.ribbon.findChildren(QToolButton)
-        self.assertEqual(len(buttons), 4)
-        self.assertEqual(buttons[0].icon_name, 'notepad')
-        self.assertEqual(buttons[0].accessibleName(), 'Scatchpad')
-        self.assertEqual(buttons[1].icon_name, 'sort-a-z')
-        self.assertEqual(buttons[1].accessibleName(), 'Dictionary')
-        self.assertEqual(buttons[2].icon_name, 'thesaurus')
-        self.assertEqual(buttons[2].accessibleName(), 'Thesaurus')
+        self.assertEqual(len(buttons), 6)
+        self.assertEqual(buttons[0].icon_name, 'folder-open')
+        self.assertEqual(buttons[0].accessibleName(), 'Open file')
+        self.assertEqual(buttons[1].icon_name, 'notepad')
+        self.assertEqual(buttons[1].accessibleName(), 'Scatchpad')
+        self.assertGreater(buttons[1].y(), buttons[0].y())
+        self.assertEqual(buttons[2].icon_name, 'sort-a-z')
+        self.assertEqual(buttons[2].accessibleName(), 'Dictionary')
+        self.assertEqual(buttons[3].icon_name, 'thesaurus')
+        self.assertEqual(buttons[3].accessibleName(), 'Thesaurus')
         self.assertGreater(buttons[2].y(), buttons[1].y())
-        self.assertEqual(buttons[3].icon_name, 'whale')
-        self.assertEqual(buttons[3].accessibleName(), 'Moby Thesaurus')
+        self.assertEqual(buttons[4].icon_name, 'whale')
+        self.assertEqual(buttons[4].accessibleName(), 'Moby Thesaurus')
         self.assertGreater(buttons[3].y(), buttons[2].y())
+        self.assertGreater(buttons[4].y(), buttons[3].y())
+        self.assertEqual(buttons[5].icon_name, 'cog')
+        self.assertEqual(buttons[5].accessibleName(), 'Settings')
+        self.assertEqual(w.ribbon.height() - buttons[5].geometry().bottom() - 1, 10)
+
+    def test_settings_icon_opens_tabbed_window(self):
+        w = self.window
+        self.assertNotIn(w.settings_menu.menuAction(), w.menuBar().actions())
+        QTest.mouseClick(w.ribbon_buttons['Settings'], Qt.MouseButton.LeftButton)
+        self.app.processEvents()
+        dialog = w.settings_dialog
+        self.assertTrue(dialog.isVisible())
+        self.assertEqual([dialog.tabs.tabText(i) for i in range(dialog.tabs.count())],
+                         ['Themes', 'Appearance', 'Shortcut Keys', 'Updates', 'General'])
+        w.show_settings()
+        self.assertIs(w.settings_dialog, dialog)
+        table = dialog.findChild(QTableWidget, 'settingsShortcuts')
+        self.assertIn('Save', [table.item(i, 0).text() for i in range(table.rowCount())])
+        dialog.close()
+        self.assertIsNone(w.settings_dialog)
+
+    def test_settings_controls_apply_and_persist(self):
+        w = self.window
+        w.editor.setPlainText('Keep my writing')
+        source = w.document_source()
+        w.show_settings()
+        dialog = w.settings_dialog
+        dialog.font_size.setValue(20)
+        dialog.spacing.setValue(12)
+        dialog.page_width.setValue(800)
+        dialog.heading_state.setCurrentIndex(dialog.heading_state.findData('full'))
+        spelling = dialog.findChild(QCheckBox, 'settingsSpellCheck')
+        spelling.setChecked(False)
+        dialog.findChild(QRadioButton, 'tokyo-night').click()
+        self.assertEqual(w.font_size, 20)
+        self.assertEqual(w.paragraph_spacing, 12)
+        self.assertEqual(w.max_page_width, 800)
+        self.assertEqual(w.heading_panel_state, 'full')
+        self.assertFalse(w.editor.spelling.enabled)
+        self.assertEqual(w.theme_id, 'tokyo-night')
+        self.assertEqual(w.document_source(), source)
+        self.assertEqual(w.settings.value('font_size', type=int), 20)
+        dialog.close()
+        w.show_settings()
+        self.assertEqual(w.settings_dialog.font_size.value(), 20)
+        self.assertEqual(w.settings_dialog.spacing.value(), 12)
+        self.assertEqual(w.settings_dialog.page_width.value(), 800)
+        self.assertFalse(w.settings_dialog.findChild(QCheckBox, 'settingsSpellCheck').isChecked())
+        w.settings_dialog.close()
+
+    def test_settings_close_waits_for_update_worker(self):
+        w = self.window
+        w.show_settings()
+        dialog = w.settings_dialog
+        worker = Mock()
+        dialog.updates.worker = worker
+        worker.isRunning.return_value = True
+        dialog.reject()
+        self.assertTrue(dialog.isVisible())
+        worker.cancelled.set.assert_called_once()
+        worker.wait.assert_called_once_with(2000)
+        worker.isRunning.return_value = False
+        dialog.reject()
+        self.assertIsNone(w.settings_dialog)
 
     def test_reference_icons_toggle_and_switch_left_panels(self):
         w = self.window

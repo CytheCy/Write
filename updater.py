@@ -17,7 +17,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QLabel, QPushButton,
-                               QProgressBar, QTextEdit, QVBoxLayout)
+                               QProgressBar, QTextEdit, QVBoxLayout, QWidget)
 
 API = "https://api.github.com/repos/CytheCy/Write/releases/latest"
 PACKAGE = "write-app"
@@ -211,7 +211,9 @@ class Worker(QThread):
             raise
 
 
-class UpdatesDialog(QDialog):
+class UpdatesPanel(QWidget):
+    close_requested = Signal()
+
     def __init__(self, window):
         super().__init__(window)
         self.window = window
@@ -219,8 +221,6 @@ class UpdatesDialog(QDialog):
         self.current = None
         self.worker = None
         self.path = None
-        self.setWindowTitle("Updates")
-        self.setMinimumWidth(500)
         layout = QVBoxLayout(self)
         self.installed = QLabel("Installed version: checking…")
         self.available = QLabel("Available version: —")
@@ -240,9 +240,6 @@ class UpdatesDialog(QDialog):
         for widget in (self.installed, self.available, self.status, self.notes, self.bar,
                        self.check_button, self.install_button, self.cancel_button):
             layout.addWidget(widget)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        buttons.rejected.connect(self.close)
-        layout.addWidget(buttons)
         self.check_button.clicked.connect(self.check)
         self.install_button.clicked.connect(self.install)
         self.cancel_button.clicked.connect(lambda: self.worker.cancelled.set())
@@ -314,13 +311,30 @@ class UpdatesDialog(QDialog):
             return
         self.window._updating = True
         self.window.close()
-        self.close()
+        self.close_requested.emit()
 
-    def closeEvent(self, event):  # noqa: N802
+    def stop_worker(self):
         if self.worker and self.worker.isRunning():
             self.worker.cancelled.set()
             self.worker.wait(2000)
             if self.worker.isRunning():
-                event.ignore()
-                return
-        super().closeEvent(event)
+                return False
+        return True
+
+
+class UpdatesDialog(QDialog):
+    def __init__(self, window):
+        super().__init__(window)
+        self.setWindowTitle("Updates")
+        self.setMinimumWidth(500)
+        layout = QVBoxLayout(self)
+        self.updates = UpdatesPanel(window)
+        self.updates.close_requested.connect(self.close)
+        layout.addWidget(self.updates)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.close)
+        layout.addWidget(buttons)
+
+    def done(self, result):
+        if self.updates.stop_worker():
+            super().done(result)

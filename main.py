@@ -71,6 +71,7 @@ from themes import (THEMES, apply_application_theme, resolve_theme, saved_theme_
 from spelling import Spelling
 from references import ReferenceTools
 from updater import UpdatesDialog
+from settings_ui import SettingsDialog
 
 
 APP_NAME = "Write"
@@ -1931,11 +1932,9 @@ class MainWindow(QMainWindow):
         self.settings.setValue('theme', identifier)
         self.settings.sync()
 
-    def create_appearance_dialog(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle('Themes')
-        dialog.setMinimumWidth(440)
-        layout = QVBoxLayout(dialog)
+    def create_theme_panel(self):
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(12)
         label = QLabel('Theme')
@@ -1943,7 +1942,7 @@ class MainWindow(QMainWindow):
         font.setBold(True)
         label.setFont(font)
         layout.addWidget(label)
-        group = QButtonGroup(dialog)
+        group = QButtonGroup(panel)
         for theme in (*THEMES.values(), resolve_theme('system', QApplication.instance().write_system_palette)):
             choice = QRadioButton(theme.name)
             choice.setObjectName(theme.id)
@@ -1962,6 +1961,15 @@ class MainWindow(QMainWindow):
         hint = QLabel('Changes apply immediately and are saved automatically.')
         hint.setWordWrap(True)
         layout.addWidget(hint)
+        layout.addStretch(1)
+        return panel
+
+    def create_appearance_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle('Themes')
+        dialog.setMinimumWidth(440)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(self.create_theme_panel())
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, parent=dialog)
         buttons.rejected.connect(dialog.close)
         layout.addWidget(buttons)
@@ -2032,7 +2040,6 @@ class MainWindow(QMainWindow):
         menu.addAction(quit_action)
         self.addAction(quit_action)
         self.settings_menu = QMenu("Settings", self.menuBar())
-        self.menuBar().addMenu(self.settings_menu)
         settings_menu = self.settings_menu
         settings_menu.addAction("Themes…", self.show_appearance)
         settings_menu.addAction("Updates…", self.show_updates)
@@ -2138,6 +2145,15 @@ class MainWindow(QMainWindow):
         layout.setSpacing(6)
         self.ribbon_buttons = {}
 
+        folder_button = BoxIconButton("folder-open", self.ribbon)
+        folder_button.setFixedSize(36, 36)
+        folder_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        folder_button.setAccessibleName("Open file")
+        folder_button.setToolTip("Open file")
+        folder_button.clicked.connect(self.choose_file)
+        layout.addWidget(folder_button)
+        self.ribbon_buttons["Open file"] = folder_button
+
         notepad_button = BoxIconButton("notepad", self.ribbon)
         notepad_button.setFixedSize(36, 36)
         notepad_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -2161,6 +2177,15 @@ class MainWindow(QMainWindow):
             layout.addWidget(button)
             self.ribbon_buttons[name] = button
         layout.addStretch(1)
+        settings_button = BoxIconButton("cog", self.ribbon)
+        settings_button.setFixedSize(36, 36)
+        settings_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        settings_button.setAccessibleName("Settings")
+        settings_button.setToolTip("Settings")
+        settings_button.clicked.connect(self.show_settings)
+        layout.addWidget(settings_button)
+        self.ribbon_buttons["Settings"] = settings_button
+
         self.ribbon_reveal = QWidget()
         self.ribbon_reveal.setObjectName("ribbonReveal")
         self.ribbon_reveal.setFixedWidth(6)
@@ -2179,6 +2204,16 @@ class MainWindow(QMainWindow):
         self.ribbon_hide_timer.setInterval(AUTO_HIDE_DELAY_MS)
         self.ribbon_hide_timer.timeout.connect(self.hide_ribbon_after_delay)
         self.set_ribbon_auto_hide(self.ribbon_auto_hide)
+
+    def show_settings(self):
+        if getattr(self, 'settings_dialog', None) is None:
+            self.settings_dialog = SettingsDialog(self, (MIN_FONT_SIZE, MAX_FONT_SIZE))
+            self.settings_dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            self.settings_dialog.finished.connect(
+                lambda _result: setattr(self, 'settings_dialog', None))
+        self.settings_dialog.show()
+        self.settings_dialog.raise_()
+        self.settings_dialog.activateWindow()
 
     def set_ribbon_auto_hide(self, enabled):
         self.ribbon_auto_hide = enabled
