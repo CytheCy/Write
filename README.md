@@ -75,6 +75,8 @@ Use **File → Open Recent** to reopen one of your last 10 opened or saved files
 
 Use **File → Reload Document** to reread the current file from disk. If you have unsaved changes, Write asks whether to save, discard, or cancel before reloading.
 
+The folder icon at the top of the left ribbon toggles the **Project tree** panel. Choose its root folder in **Settings → General → Project tree location**; your choice is saved across restarts. Expand folders and double-click a file (or press Enter) to open it. Switching files uses the usual save/discard/cancel prompt for unsaved changes.
+
 The toolbar ribbon on the left displays the **Scatchpad** notepad button. Click it to toggle an editable Markdown panel on the left. Scratch notes are saved as metadata in the same Markdown file and stay out of the main document, headings, search, and word count. For example, this block in a Markdown file displays only its contents, starting with `# hi`, in the Scatchpad:
 
 ```markdown

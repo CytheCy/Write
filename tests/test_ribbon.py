@@ -3,12 +3,14 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from PySide6.QtCore import QAbstractAnimation, QPoint, QSettings, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtGui import QTextCursor
-from PySide6.QtWidgets import QApplication, QCheckBox, QRadioButton, QTableWidget, QToolButton
+from PySide6.QtWidgets import (QApplication, QCheckBox, QMessageBox, QPushButton,
+                               QRadioButton, QTableWidget, QToolButton)
 
 from main import MainWindow
 
@@ -45,7 +47,7 @@ class RibbonTests(unittest.TestCase):
         buttons = w.ribbon.findChildren(QToolButton)
         self.assertEqual(len(buttons), 6)
         self.assertEqual(buttons[0].icon_name, 'folder-open')
-        self.assertEqual(buttons[0].accessibleName(), 'Open file')
+        self.assertEqual(buttons[0].accessibleName(), 'Project tree')
         self.assertEqual(buttons[1].icon_name, 'notepad')
         self.assertEqual(buttons[1].accessibleName(), 'Scatchpad')
         self.assertGreater(buttons[1].y(), buttons[0].y())
@@ -77,6 +79,89 @@ class RibbonTests(unittest.TestCase):
         self.assertIn('Save', [table.item(i, 0).text() for i in range(table.rowCount())])
         dialog.close()
         self.assertIsNone(w.settings_dialog)
+
+    def test_project_tree_toggles_and_switches_left_panels(self):
+        w = self.window
+        button = w.ribbon_buttons['Project tree']
+        with patch.object(w, 'choose_file') as chooser:
+            button.click()
+            chooser.assert_not_called()
+        self.app.processEvents()
+        self.assertTrue(w.project_panel.isVisible())
+        self.assertTrue(button.isChecked())
+        self.assertLess(w.project_panel.mapTo(w, QPoint()).x(),
+                        w.editor.mapTo(w, QPoint()).x())
+        button.click()
+        self.assertFalse(w.left_panels.isVisible())
+        self.assertFalse(button.isChecked())
+        w.ribbon_buttons['Scatchpad'].click()
+        button.click()
+        self.assertTrue(w.project_panel.isVisible())
+        self.assertFalse(w.ribbon_buttons['Scatchpad'].isChecked())
+        w.open_reference_panel('Dictionary')
+        self.assertFalse(button.isChecked())
+        button.click()
+        w.ribbon_buttons['Scatchpad'].click()
+        self.assertFalse(button.isChecked())
+        self.assertTrue(w.scratchpad_panel.isVisible())
+        button.click()
+        w.project_panel.findChild(QToolButton).click()
+        self.assertFalse(w.left_panels.isVisible())
+        self.assertFalse(button.isChecked())
+
+    def test_general_project_location_updates_tree_and_survives_restart(self):
+        w = self.window
+        with tempfile.TemporaryDirectory() as folder:
+            nested = Path(folder) / 'chapters'
+            nested.mkdir()
+            note = nested / 'one.md'
+            note.write_text('# One')
+            w.show_settings()
+            dialog = w.settings_dialog
+            dialog.tabs.setCurrentIndex(4)
+            with patch('settings_ui.QFileDialog.getExistingDirectory', return_value=folder):
+                dialog.findChild(QPushButton, 'settingsProjectTreeBrowse').click()
+            self.assertEqual(dialog.project_path.text(), folder)
+            self.assertEqual(w.settings.value('project_tree_path'), folder)
+            self.assertEqual(w.project_model.filePath(w.project_tree.rootIndex()), folder)
+            with patch('settings_ui.QFileDialog.getExistingDirectory', return_value=''):
+                dialog.choose_project_folder()
+            self.assertEqual(w.project_tree_path, Path(folder))
+            self.assertFalse(w.set_project_tree_path(Path(folder) / 'missing'))
+            self.assertEqual(w.project_tree_path, Path(folder))
+            dialog.close()
+            w.close()
+            w.deleteLater()
+            self.app.processEvents()
+            self.window = MainWindow()
+            self.window.show()
+            self.app.processEvents()
+            self.assertEqual(self.window.project_tree_path, Path(folder))
+            self.assertEqual(self.window.project_model.filePath(
+                self.window.project_tree.rootIndex()), folder)
+
+    def test_project_file_activation_respects_unsaved_changes(self):
+        w = self.window
+        with tempfile.TemporaryDirectory() as folder:
+            note = Path(folder) / 'note.md'
+            note.write_text('# Project note')
+            w.set_project_tree_path(folder)
+            w.ribbon_buttons['Project tree'].click()
+            index = w.project_model.index(str(note))
+            self.assertTrue(index.isValid())
+            # Activating a directory must never try to open it as a document.
+            with patch.object(w, 'open_file') as open_file:
+                w.project_tree.activated.emit(w.project_tree.rootIndex())
+                open_file.assert_not_called()
+            w.editor.setPlainText('Unsaved writing')
+            with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Cancel):
+                w.project_tree.activated.emit(index)
+            self.assertEqual(w.editor.toPlainText(), 'Unsaved writing')
+            self.assertIsNone(w.current_file)
+            with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Discard):
+                w.project_tree.activated.emit(index)
+            self.assertEqual(w.current_file, note)
+            self.assertEqual(w.editor.toPlainText(), '# Project note')
 
     def test_settings_controls_apply_and_persist(self):
         w = self.window

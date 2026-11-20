@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
+    QFileSystemModel,
     QFrame,
     QFormLayout,
     QHBoxLayout,
@@ -61,6 +62,7 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QToolButton,
     QToolTip,
+    QTreeView,
     QVBoxLayout,
     QWidget,
 )
@@ -1695,6 +1697,15 @@ class MainWindow(QMainWindow):
         self.left_panels.setObjectName("leftPanels")
         self.left_panels.setMinimumWidth(180)
         self.left_panels.addWidget(self.scratchpad_panel)
+        project_path = self.settings.value("project_tree_path", "", type=str)
+        if not project_path or not Path(project_path).is_dir():
+            last_file = self.settings.value("last_open_file", "", type=str)
+            candidate = initial_file or (Path(last_file) if last_file else None)
+            project_path = str(candidate.parent if candidate and candidate.parent.is_dir()
+                               else Path.home())
+        self.project_tree_path = Path(project_path)
+        self.setup_project_tree()
+        self.left_panels.addWidget(self.project_panel)
         self.reference_tools = ReferenceTools(self.settings, self)
         self.reference_panels = self.reference_tools.panels
         for name, panel in self.reference_panels.items():
@@ -2148,11 +2159,12 @@ class MainWindow(QMainWindow):
         folder_button = BoxIconButton("folder-open", self.ribbon)
         folder_button.setFixedSize(36, 36)
         folder_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        folder_button.setAccessibleName("Open file")
-        folder_button.setToolTip("Open file")
-        folder_button.clicked.connect(self.choose_file)
+        folder_button.setAccessibleName("Project tree")
+        folder_button.setToolTip("Project tree")
+        folder_button.setCheckable(True)
+        folder_button.clicked.connect(self.toggle_project_tree)
         layout.addWidget(folder_button)
-        self.ribbon_buttons["Open file"] = folder_button
+        self.ribbon_buttons["Project tree"] = folder_button
 
         notepad_button = BoxIconButton("notepad", self.ribbon)
         notepad_button.setFixedSize(36, 36)
@@ -2214,6 +2226,65 @@ class MainWindow(QMainWindow):
         self.settings_dialog.show()
         self.settings_dialog.raise_()
         self.settings_dialog.activateWindow()
+
+    def setup_project_tree(self):
+        self.project_panel = QWidget()
+        self.project_panel.setObjectName("projectPanel")
+        layout = QVBoxLayout(self.project_panel)
+        layout.setContentsMargins(10, 12, 10, 10)
+        header = QHBoxLayout()
+        header.addWidget(QLabel("Project tree"), 1)
+        close = BoxIconButton("x", self.project_panel)
+        close.setFixedSize(28, 28)
+        close.setAccessibleName("Close project tree")
+        close.setToolTip("Close project tree")
+        close.clicked.connect(self.close_left_panel)
+        header.addWidget(close)
+        layout.addLayout(header)
+        self.project_root_label = QLabel()
+        self.project_root_label.setWordWrap(True)
+        layout.addWidget(self.project_root_label)
+        self.project_model = QFileSystemModel(self)
+        self.project_model.setReadOnly(True)
+        self.project_tree = QTreeView()
+        self.project_tree.setObjectName("projectTree")
+        self.project_tree.setAccessibleName("Project files")
+        self.project_tree.setModel(self.project_model)
+        self.project_tree.setHeaderHidden(True)
+        for column in range(1, self.project_model.columnCount()):
+            self.project_tree.hideColumn(column)
+        self.project_tree.activated.connect(self.open_project_item)
+        layout.addWidget(self.project_tree, 1)
+        self.update_project_root()
+
+    def update_project_root(self):
+        path = str(self.project_tree_path)
+        self.project_root_label.setText(self.project_tree_path.name or path)
+        self.project_root_label.setToolTip(path)
+        self.project_tree.setRootIndex(self.project_model.setRootPath(path))
+
+    def set_project_tree_path(self, path):
+        path = Path(path).expanduser().absolute()
+        if not path.is_dir():
+            return False
+        self.project_tree_path = path
+        self.settings.setValue("project_tree_path", str(path))
+        self.update_project_root()
+        return True
+
+    def toggle_project_tree(self):
+        if self.left_panels.isVisible() and self.left_panels.currentWidget() is self.project_panel:
+            self.close_left_panel()
+        else:
+            self.ribbon_buttons["Scatchpad"].setChecked(False)
+            self.ribbon_buttons["Project tree"].setChecked(True)
+            self.left_panels.setCurrentWidget(self.project_panel)
+            self.left_panels.show()
+            self.project_tree.setFocus()
+
+    def open_project_item(self, index):
+        if index.isValid() and not self.project_model.isDir(index):
+            self.open_file(Path(self.project_model.filePath(index)))
 
     def set_ribbon_auto_hide(self, enabled):
         self.ribbon_auto_hide = enabled
@@ -2892,6 +2963,7 @@ class MainWindow(QMainWindow):
 
     def toggle_scratchpad(self, visible):
         if visible:
+            self.ribbon_buttons["Project tree"].setChecked(False)
             self.left_panels.setCurrentWidget(self.scratchpad_panel)
             self.left_panels.show()
             self.scratchpad_editor.setFocus()
@@ -2940,6 +3012,7 @@ class MainWindow(QMainWindow):
             word = self.editor.textCursor().selectedText().replace('\u2029', ' ').strip()
         button = self.ribbon_buttons["Scatchpad"]
         button.setChecked(False)
+        self.ribbon_buttons["Project tree"].setChecked(False)
         panel = self.reference_panels[name]
         self.left_panels.setCurrentWidget(panel)
         self.left_panels.show()
@@ -2950,6 +3023,7 @@ class MainWindow(QMainWindow):
 
     def close_left_panel(self):
         self.ribbon_buttons["Scatchpad"].setChecked(False)
+        self.ribbon_buttons["Project tree"].setChecked(False)
         self.left_panels.hide()
         self.editor.setFocus()
 

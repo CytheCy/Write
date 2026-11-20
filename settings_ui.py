@@ -4,7 +4,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-    QFormLayout, QHeaderView, QLabel, QScrollArea, QSpinBox,
+    QFileDialog, QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+    QPushButton, QScrollArea, QSpinBox,
     QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -142,6 +143,19 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.action_checkbox(
             window.spell_check_action, 'Spell check (English)', 'settingsSpellCheck'))
         layout.addSpacing(12)
+        layout.addWidget(QLabel('Project tree location'))
+        project_row = QHBoxLayout()
+        self.project_path = QLineEdit(str(window.project_tree_path))
+        self.project_path.setObjectName('settingsProjectTreePath')
+        self.project_path.setAccessibleName('Project tree location')
+        self.project_path.setReadOnly(True)
+        project_row.addWidget(self.project_path, 1)
+        browse = QPushButton('Choose folder…')
+        browse.setObjectName('settingsProjectTreeBrowse')
+        browse.clicked.connect(self.choose_project_folder)
+        project_row.addWidget(browse)
+        layout.addLayout(project_row)
+        layout.addSpacing(12)
         layout.addWidget(QLabel('Reference API key files'))
         hint = QLabel('Choose the text files containing your dictionary and thesaurus API keys.')
         hint.setWordWrap(True)
@@ -151,6 +165,13 @@ class SettingsDialog(QDialog):
                 layout.addWidget(KeyPathRow(name, setting_key, window.settings))
         layout.addStretch(1)
         return panel
+
+    def choose_project_folder(self):
+        window = self.editor_window
+        selected = QFileDialog.getExistingDirectory(
+            self, 'Choose project tree folder', str(window.project_tree_path))
+        if selected and window.set_project_tree_path(selected):
+            self.project_path.setText(str(window.project_tree_path))
 
     def done(self, result):
         if self.updates.stop_worker():
