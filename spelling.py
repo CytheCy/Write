@@ -214,7 +214,10 @@ class Spelling(QObject):
         if inline is not None and inline[1] == block:
             start = inline[2]
             inline = None
-        marker = re.match(r'^ {0,3}(`{3,}|~{3,})', text) if self._markdown else None
+        cache = block.userData()
+        marker = (getattr(cache, 'spelling_fence', None)
+                  if getattr(cache, 'syntax_source', None) == text else
+                  re.match(r'^ {0,3}(`{3,}|~{3,})', text)) if self._markdown else None
         if fence:
             if (marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence)
                     and not text[marker.end():].strip()):

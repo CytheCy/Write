@@ -179,6 +179,29 @@ isolate these paths. Run before and after on the same machine without other test
 processes running; offscreen timings do not measure desktop input or compositor
 latency. The recorded comparison is in `artifacts/editor-performance.json`.
 
+File switching has a separate benchmark with the project tree open:
+
+```bash
+QT_QPA_PLATFORM=offscreen python3 tests/benchmark_file_switching.py --output /tmp/write-switching.json
+```
+
+It activates real temporary files through the tree handler and records the
+handler time, first completed editor paint, and completion of deferred loading
+work. Each result is the median of five samples after a warmup. Cases cover
+100, 500, and 5,000 prose paragraphs, a 120-row table, mixed headings and code,
+and a 5,000-paragraph document with Find open. Spelling is disabled to isolate
+loading. `--root /path/to/checkout` runs the same fixtures against another
+version. Run comparisons without competing tests or benchmarks. Results are
+recorded in `artifacts/file-switching-performance.json`.
+
+Opening a file prepares its paragraph spacing before attaching the document,
+highlights it once, and reuses that pass's heading and panel information. Table
+cells prepare on demand for visible rows, then in short background batches;
+column widths settle to their exact measurements when preparation finishes.
+For notes over 300 paragraphs, heading rows and search matches populate after
+the first editor paint. Switching again cancels the previous note's pending
+presentation work.
+
 Word totals and saved-source differences are maintained per paragraph, so
 ordinary edits only inspect the changed paragraphs. Adding or deleting newlines
 also updates saved comparisons for the shifted paragraphs. Saving takes a new

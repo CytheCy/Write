@@ -65,6 +65,10 @@ def run():
         path.write_text('| Name | Description | Status | Price |\n| --- | --- | :---: | ---: |\n' +
                         ''.join(f'| Item {i} | **Some text** and `code` | Active | $10 |\n' for i in range(120)) + 'After')
         window.open_file(path)
+        # This benchmark measures a complete eager table rebuild. File loading's
+        # progressive rendering is measured by benchmark_file_switching.py.
+        editor._defer_tables = False
+        editor.update_code_panels(full=True)
         editor.moveCursor(QTextCursor.MoveOperation.End)
         editor.verticalScrollBar().setValue(0)
         app.processEvents()

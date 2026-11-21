@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import argparse
 import codecs
+from collections import deque
 from functools import lru_cache
 import os
 import re
 import sys
+from time import perf_counter
 from pathlib import Path
 
 from PySide6.QtCore import (
@@ -94,6 +96,8 @@ def split_scratchpad(source):
     fence = None
     offset = 0
     candidates = {match.start(): match for match in pattern.finditer(source)}
+    if not candidates:
+        return source, '', '', 0
     for line in source.splitlines(keepends=True):
         marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
         if fence:
@@ -178,6 +182,12 @@ def boxicon(name: str, color: str) -> QSvgRenderer:
 
 def fmt(color: str | None = None, *, bold: bool = False, italic: bool = False,
         size: float | None = None, family: str | None = None) -> QTextCharFormat:
+    # Callers may modify their format. Share only the immutable template.
+    return QTextCharFormat(_format_template(color, bold, italic, size, family))
+
+
+@lru_cache(maxsize=256)
+def _format_template(color, bold, italic, size, family):
     result = QTextCharFormat()
     if color:
         result.setForeground(QColor(color))
@@ -225,6 +235,8 @@ def web_link_at(text: str, offset: int, markdown: bool = True) -> str | None:
 
 def table_cells(line: str):
     """Return cell and pipe spans, ignoring escaped and code-span pipes."""
+    if '|' not in line:
+        return None
     pipes = []
     code_run = 0
     index = 0
@@ -289,6 +301,11 @@ class HeadingBlockData(QTextBlockUserData):
         self.out_code = out_code
         self.panel = None
         self.spelling = None
+        self.syntax_source = None
+        self.syntax_heading = None
+        self.syntax_in_code = None
+        self.syntax_out_code = None
+        self.spelling_fence = None
 
 
 class SourceStats:
@@ -352,6 +369,36 @@ class PanelBlock:
         self.docs = None
         self.parity = None
         self.table_layout = None
+        self.cells = table_cells(text) if kind == 'table' else None
+
+
+class TableCells:
+    """Materialize a loaded table row only when it is visible or idle work reaches it."""
+
+    def __init__(self, editor, record):
+        self.editor = editor
+        self.record = record
+        self.documents = None
+        self.estimates = [max(64.0, editor.fontMetrics().horizontalAdvance(
+            record.text[start:end].strip()) + 24) for start, end in record.cells[0]]
+
+    def prepare(self):
+        if self.documents is None:
+            self.documents = self.editor.table_cell_documents(self.record)
+            # Measure the unwrapped cells in the same bounded batch, before
+            # paint assigns viewport widths. Final aggregation then stays cheap.
+            for document in self.documents:
+                TableLayout.intrinsic_width(document)
+        return self.documents
+
+    def __len__(self):
+        return len(self.estimates)
+
+    def __iter__(self):
+        return iter(self.prepare())
+
+    def __getitem__(self, index):
+        return self.prepare()[index]
 
 
 class TableLayout:
@@ -360,12 +407,22 @@ class TableLayout:
     def __init__(self, alignment, rows):
         self.alignment = alignment
         self.rows = rows
-        self.natural = [max(64.0, max((self.intrinsic_width(docs[i]) + 24
-                        for _, docs in rows if i < len(docs)), default=64.0))
-                        for i in range(len(alignment))]
+        self.natural = [max(64.0, max((
+            docs.estimates[i] if isinstance(docs, TableCells) and docs.documents is None
+            else self.intrinsic_width(docs[i]) + 24
+            for _, docs in rows if i < len(docs)), default=64.0))
+            for i in range(len(alignment))]
         self.available = None
         self.widths = []
         self.prepared = {}
+
+    def finish_measurements(self):
+        natural = [max(64.0, max((self.intrinsic_width(docs[i]) + 24
+                   for _, docs in self.rows if i < len(docs)), default=64.0))
+                   for i in range(len(self.alignment))]
+        if natural != self.natural:
+            self.natural = natural
+            self.available = None
 
     @staticmethod
     def intrinsic_width(doc):
@@ -427,7 +484,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             document.markContentsDirty(0, document.characterCount())
 
     def update_active_block(self):
-        if self.document() is None:
+        if self.document() is None or (self.editor and self.editor._loading_document):
             return
         block = None if self.editor._cursor_dismissed else self.editor.textCursor().block()
         if block == self.active_block:
@@ -498,19 +555,39 @@ class MarkdownHighlighter(QSyntaxHighlighter):
 
     def source_format(self, start, length, style):
         # Python regex offsets count code points; Qt counts UTF-16 units.
-        offset = len(self.block_text[:start].encode('utf-16-le')) // 2
-        count = len(self.block_text[start:start + length].encode('utf-16-le')) // 2
+        if self.block_is_bmp:
+            offset, count = start, length
+        else:
+            offset = len(self.block_text[:start].encode('utf-16-le')) // 2
+            count = len(self.block_text[start:start + length].encode('utf-16-le')) // 2
         self.setFormat(offset, count, style)
 
     def highlightBlock(self, text: str):  # noqa: N802 (Qt API)
         self.highlight_source_block(text)
         if self.editor is not None:
+            cache = self.editor.block_data(self.currentBlock())
+            # Heading navigation uses exactly the heading recognition performed
+            # for display, including the incoming fenced-code context.
+            cache.syntax_source = text
+            cache.syntax_in_code = self.previousBlockState() == 1
+            cache.syntax_out_code = self.currentBlockState() == 1
+            cache.spelling_fence = (re.match(r'^ {0,3}(`{3,}|~{3,})', text)
+                                    if '`' in text or '~' in text else None)
+            cache.syntax_heading = self.block_heading
             self.editor.record_panel_block(self.currentBlock(), text)
 
     def highlight_source_block(self, text):
         self.block_text = text
+        self.block_heading = None
+        self.block_is_bmp = text.isascii() or not any(ord(char) > 0xffff for char in text)
         self.setCurrentBlockState(0)
         if not self.enabled:
+            return
+        # Most prose contains no Markdown. Establish the state, then avoid all
+        # table/emphasis/link parsing and Qt format allocation for those lines.
+        if (self.previousBlockState() != 1 and
+                not any(char in text for char in '`~|#>*_[-+\\') and
+                not re.match(r'^\s*\d+[.)]\s', text)):
             return
         if self.previousBlockState() == 1:
             self.setCurrentBlockState(1)
@@ -533,6 +610,10 @@ class MarkdownHighlighter(QSyntaxHighlighter):
                 self.source_format(0, len(text), fmt(Qt.GlobalColor.transparent, family="monospace"))
             return
 
+        heading_match = re.match(r"^(#{1,6})(\s+)(.*)$", text) if text.startswith('#') else None
+        if heading_match:
+            self.block_heading = (len(heading_match[1]),
+                                  re.sub(r'\s+#+\s*$', '', heading_match[3]).strip())
         table = None
         parsed = table_cells(text)
         previous = self.previousBlockState()
@@ -552,7 +633,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
                 table = 'body'
                 self.setCurrentBlockState(4)
 
-        heading = re.match(r"^(#{1,6})(\s+)(.*)$", text) if table is None else None
+        heading = heading_match if table is None else None
         if heading:
             level = len(heading.group(1))
             size = ([25, 21, 18, 16, 14, 13][level - 1]
@@ -595,12 +676,15 @@ class MarkdownHighlighter(QSyntaxHighlighter):
                     self.source_format(lead.end(), len(text) - lead.end(), fmt(self.quote))
 
         # Format emphasis content while collapsing its source marks off the active line.
-        code_matches = list(re.finditer(r"(?<!`)(`+)([^`\n]+)\1(?!`)", text))
+        code_matches = (list(re.finditer(r"(?<!`)(`+)([^`\n]+)\1(?!`)", text))
+                        if '`' in text else [])
         code_spans = [(m.start(), m.end()) for m in code_matches]
         for pattern, styled in (
             (r"(?<!\*)\*\*([^*\n]+)\*\*(?!\*)|__([^_\n]+)__", fmt(self.theme['md_bold'], bold=True)),
             (r"(?<!\*)\*([^*\n]+)\*(?!\*)|(?<!_)_([^_\n]+)_(?!_)", fmt(self.theme['md_italic'], italic=True)),
         ):
+            if '*' not in text and '_' not in text:
+                continue
             for match in re.finditer(pattern, text):
                 if any(match.start() < end and start < match.end()
                        for start, end in code_spans):
@@ -643,11 +727,16 @@ class NoteEditor(QTextEdit):
     modificationChanged = Signal(bool)
     sourceEdited = Signal(int, int, int)
     documentAboutToChange = Signal()
+    firstLoadPainted = Signal()
 
     def __init__(self):
         super().__init__()
         self.source_stats = SourceStats()
         self._formatting_document = False
+        self._loading_document = False
+        self._defer_tables = False
+        self._awaiting_first_paint = False
+        self._table_pending = deque()
         self.paragraph_spacing = 0
         self._cursor_dismissed = False
         self._highlight_neighbors = []
@@ -672,6 +761,9 @@ class NoteEditor(QTextEdit):
         self._code_update_timer = QTimer(self)
         self._code_update_timer.setSingleShot(True)
         self._code_update_timer.timeout.connect(self.flush_panel_update)
+        self._table_prepare_timer = QTimer(self)
+        self._table_prepare_timer.setSingleShot(True)
+        self._table_prepare_timer.timeout.connect(self.prepare_table_batch)
         self.setAcceptDrops(True)
         self.setAcceptRichText(False)
         self.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
@@ -690,7 +782,7 @@ class NoteEditor(QTextEdit):
 
     def update_scroll_range(self, *_):
         """Leave half a viewport of scroll space after the actual document."""
-        if self._updating_scroll_range:
+        if self._updating_scroll_range or self._loading_document:
             return
         self._updating_scroll_range = True
         try:
@@ -728,12 +820,15 @@ class NoteEditor(QTextEdit):
             self.sourceEdited.emit(position, removed, added)
             self.sourceChanged.emit()
 
-    def setPlainText(self, text):  # noqa: N802 (Qt API)
+    def setPlainText(self, text, *, defer_presentation=False):  # noqa: N802 (Qt API)
         old_document = self.document()
         removed = old_document.characterCount() - 1
         self.documentAboutToChange.emit()
         old_document.contentsChange.disconnect(self.on_contents_change)
         self.reset_document_state()
+        self._loading_document = True
+        self._defer_tables = defer_presentation
+        self._awaiting_first_paint = defer_presentation
         highlighter = getattr(self, 'highlighter', None)
         if highlighter is not None:
             highlighter.setParent(self)
@@ -741,7 +836,18 @@ class NoteEditor(QTextEdit):
         document = QTextDocument(self)
         document.setDefaultFont(old_document.defaultFont())
         document.setDocumentMargin(old_document.documentMargin())
+        # Populate and format the detached document without notifying source
+        # consumers or highlighting during its first layout in QTextEdit.
+        document.blockSignals(True)
+        document.setUndoRedoEnabled(False)
         document.setPlainText(text)
+        formatting_cursor = QTextCursor(document)
+        formatting_cursor.select(QTextCursor.SelectionType.Document)
+        block_format = QTextBlockFormat()
+        block_format.setBottomMargin(self.paragraph_spacing)
+        formatting_cursor.mergeBlockFormat(block_format)
+        document.setUndoRedoEnabled(True)
+        document.blockSignals(False)
         self.source_stats.update(document, 0, document.characterCount() - 1)
         old_document.modificationChanged.disconnect(self.modificationChanged)
         # Swap complete documents rather than deleting live paragraphs inside
@@ -752,11 +858,15 @@ class NoteEditor(QTextEdit):
         old_document.setParent(self)
         document.contentsChange.connect(self.on_contents_change)
         document.modificationChanged.connect(self.modificationChanged)
-        self.set_paragraph_spacing(self.paragraph_spacing)
         if highlighter is not None:
             highlighter.setDocument(document)
-            highlighter.update_active_block()
+            highlighter.active_block = (None if self._cursor_dismissed
+                                        else document.firstBlock())
+            # An explicit pass also consumes Qt's queued initial highlight.
             highlighter.rehighlight()
+        self._loading_document = False
+        # The initial highlighter pass already recorded all panel paragraphs.
+        self._panel_full_update = False
         self.sourceEdited.emit(0, removed, document.characterCount() - 1)
         self.sourceChanged.emit()
         # Let source consumers release old block/cursor references first.
@@ -769,6 +879,9 @@ class NoteEditor(QTextEdit):
     def reset_document_state(self):
         """Release presentation state before Qt removes the old paragraphs."""
         self._code_update_timer.stop()
+        self._table_prepare_timer.stop()
+        self._table_pending.clear()
+        self._awaiting_first_paint = False
         self._highlight_neighbors.clear()
         self._panel_blocks.clear()
         self._panels_dirty = True
@@ -910,6 +1023,8 @@ class NoteEditor(QTextEdit):
         else:
             self.table_regions = []
             self._table_layouts.clear()
+            self._table_pending.clear()
+            self._table_prepare_timer.stop()
         if selections_changed:
             self.refresh_extra_selections()
         if self._hovered_code_panel not in self.code_panels:
@@ -941,7 +1056,7 @@ class NoteEditor(QTextEdit):
 
     def table_cell_documents(self, record):
         docs = []
-        for start, end in table_cells(record.text)[0]:
+        for start, end in record.cells[0]:
             cell = record.text[start:end].strip()
             doc = QTextDocument()
             doc.setDocumentMargin(0)
@@ -957,6 +1072,7 @@ class NoteEditor(QTextEdit):
         return docs
 
     def update_table_regions(self, records):
+        self._table_prepare_timer.stop()
         self.table_regions = []
         layouts = {}
         index = 0
@@ -975,7 +1091,8 @@ class NoteEditor(QTextEdit):
                 current = records[index]
                 if current.state != 3:
                     if current.docs is None:
-                        current.docs = self.table_cell_documents(current)
+                        current.docs = (TableCells(self, current) if self._defer_tables
+                                        else self.table_cell_documents(current))
                     rows.append((current.block.position(), current.docs))
                 index += 1
                 if index < len(records) and current.block.next() != records[index].block:
@@ -989,6 +1106,30 @@ class NoteEditor(QTextEdit):
                 delimiter.table_layout = layout
             layouts[delimiter.block.position()] = layout
         self._table_layouts = layouts
+        self._table_pending = deque(docs for _, _, rows in self.table_regions
+                                    for _, docs in rows if isinstance(docs, TableCells)
+                                    and docs.documents is None)
+        if self._table_pending and not self._awaiting_first_paint:
+            self._table_prepare_timer.start(1)
+
+    def prepare_table_batch(self):
+        """Prepare offscreen cells in short turns; visible cells prepare in paint."""
+        deadline = perf_counter() + 0.004
+        while self._table_pending:
+            cells = self._table_pending.popleft()
+            block = cells.record.block
+            cache = block.userData() if block.isValid() else None
+            if (isinstance(cache, HeadingBlockData) and cache.panel is cells.record
+                    and cells.record.docs is cells):
+                cells.prepare()
+            if perf_counter() >= deadline:
+                break
+        if self._table_pending:
+            self._table_prepare_timer.start(1)
+        else:
+            for layout in self._table_layouts.values():
+                layout.finish_measurements()
+            self.viewport().update()
 
     def keyPressEvent(self, event):  # noqa: N802 (Qt API)
         if (getattr(self, 'highlighter', None) is not None
@@ -1088,6 +1229,7 @@ class NoteEditor(QTextEdit):
         super().paintEvent(event)
         highlighter = getattr(self, 'highlighter', None)
         if highlighter is None or not highlighter.enabled:
+            self.finish_initial_paint()
             return
         painter = QPainter(self.viewport())
         self.paint_code_panels(painter, event.rect())
@@ -1138,6 +1280,17 @@ class NoteEditor(QTextEdit):
                     painter.drawEllipse(marker_area.center(), radius, radius)
             block = block.next()
         painter.end()
+        self.finish_initial_paint()
+
+    def finish_initial_paint(self):
+        if self._awaiting_first_paint:
+            self._awaiting_first_paint = False
+            # Progressive preparation is a load policy. Later edits keep the
+            # existing behavior of rebuilding just their changed row eagerly.
+            self._defer_tables = False
+            if self._table_pending:
+                self._table_prepare_timer.start(1)
+            self.firstLoadPainted.emit()
 
     def paint_tables(self, painter, dirty):
         theme = self.highlighter.theme
@@ -1708,6 +1861,10 @@ class MainWindow(QMainWindow):
         self.newline = "\n"
         self.has_bom = False
         self.loading = False
+        self._load_details_pending = False
+        self._load_details_timer = QTimer(self)
+        self._load_details_timer.setSingleShot(True)
+        self._load_details_timer.timeout.connect(self.finish_load_details)
         self.setWindowTitle(APP_NAME)
         self.resize(1120, 760)
         self.setMinimumSize(640, 440)
@@ -1719,6 +1876,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
         self.editor = NoteEditor()
+        self.editor.firstLoadPainted.connect(self.schedule_load_details)
         self._scratch_raw = ''
         self._scratch_original = ''
         self._scratch_anchor = None
@@ -2599,6 +2757,8 @@ class MainWindow(QMainWindow):
             self._resizing_heading_panel = False
 
     def reset_heading_cache(self):
+        self._load_details_timer.stop()
+        self._load_details_pending = False
         self._heading_cache_valid = False
         self._heading_blocks = []
         self._heading_edit = None
@@ -2611,6 +2771,11 @@ class MainWindow(QMainWindow):
 
     def parse_heading_block(self, block, in_code):
         text = block.text()
+        cache = block.userData()
+        if (isinstance(cache, HeadingBlockData) and cache.syntax_source == text
+                and cache.syntax_in_code == in_code):
+            cache.in_code, cache.out_code = in_code, cache.syntax_out_code
+            return cache.out_code, cache.syntax_heading
         heading = None
         out_code = in_code
         if re.match(r"^\s*(`{3,}|~{3,})", text):
@@ -2666,6 +2831,8 @@ class MainWindow(QMainWindow):
                 [block for block, _, _ in entries])
 
     def update_headings(self, reset=False):
+        if self._load_details_pending:
+            return
         edit, self._heading_edit = self._heading_edit, None
         full = reset or not self._heading_cache_valid or self._heading_mode != self.highlighter.enabled
         if edit is None and not full:
@@ -3132,16 +3299,22 @@ class MainWindow(QMainWindow):
         if not self.loading:
             self.update_title()
 
-    def load_document_source(self, source, *, markdown=True):
+    def load_document_source(self, source, *, markdown=True, defer_presentation=False):
+        self._load_details_timer.stop()
+        self._load_details_pending = False
+        self.find_matches = []
+        self.find_index = -1
         body, scratch, raw, offset = (split_scratchpad(source) if markdown
                                       else (source, '', '', 0))
         self._scratch_anchor = None
         self._scratch_raw = raw
         self._scratch_original = scratch
-        self.scratchpad_editor.setPlainText(scratch)
+        if scratch or self.scratchpad_editor.document().characterCount() > 1:
+            self.scratchpad_editor.setPlainText(scratch)
         self.scratchpad_editor.document().setModified(False)
         self.scratchpad_editor.document().clearUndoRedoStacks()
-        self.editor.setPlainText(body)
+        self.highlighter.enabled = markdown
+        self.editor.setPlainText(body, defer_presentation=defer_presentation)
         self._scratch_anchor = QTextCursor(self.editor.document())
         self._scratch_anchor.setPosition(len(body[:offset].encode('utf-16-le')) // 2)
         self._scratch_anchor.setKeepPositionOnInsert(True)
@@ -3177,22 +3350,47 @@ class MainWindow(QMainWindow):
         self.newline = "\r\n" if "\r\n" in content else ("\r" if "\r" in content else "\n")
         content = content.replace("\r\n", "\n").replace("\r", "\n")
         self.loading = True
-        self.load_document_source(content, markdown=path.suffix.lower() != '.txt')
+        self.load_document_source(content, markdown=path.suffix.lower() != '.txt',
+                                  defer_presentation=True)
         self.loading = False
         self.current_file = path.resolve()
-        self.highlighter.enabled = self.current_file.suffix.lower() != ".txt"
-        self.highlighter.rehighlight()
-        self.editor.update_code_panels()
+        self.editor.update_code_panels(full=False)
         self.editor.document().setModified(False)
         self.editor.document().clearUndoRedoStacks()
-        self._saved_text = self.document_source()
+        self.mark_loaded_source_saved()
         self.editor.moveCursor(self.editor.textCursor().MoveOperation.Start)
-        self.update_headings(reset=True)
+        self._load_details_pending = self.editor.document().blockCount() > 300
+        if self._load_details_pending:
+            # Release rows belonging to the previous document immediately.
+            self.heading_list.clear()
+            self.headings = []
+        else:
+            self.update_headings(reset=True)
+            if self.search_controls():
+                self.update_find_matches()
         self.update_title()
         self.update_status()
         self.editor.setFocus()
         self.remember_recent_file(self.current_file)
         return True
+
+    def mark_loaded_source_saved(self):
+        """The load transaction knows its components match; do not reserialize twice."""
+        self._saved_source = self.document_source()
+        self._saved_components_valid = True
+        self.editor.source_stats.mark_saved()
+        self.scratchpad_editor.source_stats.mark_saved()
+        self._saved_anchor = self._scratch_anchor.position() if self._scratch_anchor else None
+
+    def schedule_load_details(self):
+        if self._load_details_pending:
+            self._load_details_timer.start(1)
+
+    def finish_load_details(self):
+        self._load_details_pending = False
+        self.update_headings(reset=True)
+        if self.search_controls():
+            self.update_find_matches()
 
     def new_file(self):
         if not self.confirm_discard():
@@ -3203,12 +3401,10 @@ class MainWindow(QMainWindow):
         self.current_file = None
         self.newline = "\n"
         self.has_bom = False
-        self.highlighter.enabled = True
-        self.highlighter.rehighlight()
-        self.editor.update_code_panels()
+        self.editor.update_code_panels(full=False)
         self.editor.document().setModified(False)
         self.editor.document().clearUndoRedoStacks()
-        self._saved_text = self.document_source()
+        self.mark_loaded_source_saved()
         self.update_title()
         self.update_status()
         self.editor.setFocus()
@@ -3275,11 +3471,12 @@ class MainWindow(QMainWindow):
         return True
 
     def on_text_changed(self):
+        if self.loading:
+            return
         if self.find_footer.isVisible() or self.replace_footer.isVisible():
             self.update_find_matches()
-        if not self.loading:
-            self.update_title()
-            self.update_status()
+        self.update_title()
+        self.update_status()
 
     def open_find(self):
         if self.find_footer.isVisible():
@@ -3347,7 +3544,8 @@ class MainWindow(QMainWindow):
         self.refresh_find_selections()
 
     def update_find_position(self):
-        if not self.search_controls() or not self.find_matches:
+        if (self.loading or self._load_details_pending or not self.search_controls()
+                or not self.find_matches):
             return
         position = self.editor.textCursor().position()
         index = max((i for i, (start, _) in enumerate(self.find_matches)
@@ -3455,6 +3653,8 @@ class MainWindow(QMainWindow):
             self._saved_anchor = self._scratch_anchor.position() if self._scratch_anchor else None
 
     def update_title(self):
+        if self.loading or self.editor._loading_document:
+            return
         self.reload_action.setEnabled(self.current_file is not None)
         name = self.current_file.name if self.current_file else "Untitled"
         dirty = self.has_unsaved_changes()

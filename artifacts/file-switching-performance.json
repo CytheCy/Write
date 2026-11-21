@@ -1,0 +1,800 @@
+{
+  "date": "2026-11-21T03:45:34.427524+00:00",
+  "baseline_commit": "b83468dc69702ef5bcfe28ccc2ea9ba61d33f2c3",
+  "environment": {
+    "platform": "Linux-7.3.4-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "python": "3.14.10",
+    "pyside6": "6.10.2",
+    "qt_platform": "offscreen"
+  },
+  "method": "Same machine and harness; three process runs per version in before/after, after/before, before/after order, without competing test or benchmark processes. Each process measures five samples after a warmup per fixture; report uses the median of the three process medians. Real temporary files, project tree visible, direct tree activation handler, spelling disabled. First paint is recorded after the editor paint completes. Settled time includes deferred table preparation and heading/search updates plus drained events; it excludes spelling. Desktop input and compositor latency are not measured.",
+  "after_source_sha256": {
+    "main.py": "bbccfe0e0eb42de7ce46fcfa8664e77ee2ad3047699911ec7830219fe5802fb6",
+    "spelling.py": "04c684c7b42d074b0a547dbce15ff687ef38d741b4b163d439866869fc8373b6",
+    "tests/benchmark_file_switching.py": "85bea62603b1988bafa29ec331b9ca842024b78365df674dd676423659275fb1"
+  },
+  "before_ms": {
+    "prose_100": {
+      "handler_ms": 28.815,
+      "first_paint_ms": 35.77,
+      "settled_ms": 37.629
+    },
+    "prose_500": {
+      "handler_ms": 122.526,
+      "first_paint_ms": 129.693,
+      "settled_ms": 131.474
+    },
+    "prose_5000": {
+      "handler_ms": 1203.047,
+      "first_paint_ms": 1212.222,
+      "settled_ms": 1214.122
+    },
+    "table_120": {
+      "handler_ms": 211.313,
+      "first_paint_ms": 226.416,
+      "settled_ms": 229.063
+    },
+    "mixed_500": {
+      "handler_ms": 501.647,
+      "first_paint_ms": 520.249,
+      "settled_ms": 554.193
+    },
+    "find_5000": {
+      "handler_ms": 1382.807,
+      "first_paint_ms": 1392.969,
+      "settled_ms": 1395.316
+    }
+  },
+  "after_ms": {
+    "prose_100": {
+      "handler_ms": 10.429,
+      "first_paint_ms": 17.315,
+      "settled_ms": 18.302
+    },
+    "prose_500": {
+      "handler_ms": 24.848,
+      "first_paint_ms": 31.917,
+      "settled_ms": 38.87
+    },
+    "prose_5000": {
+      "handler_ms": 205.954,
+      "first_paint_ms": 214.49,
+      "settled_ms": 234.636
+    },
+    "table_120": {
+      "handler_ms": 44.314,
+      "first_paint_ms": 80.357,
+      "settled_ms": 230.587
+    },
+    "mixed_500": {
+      "handler_ms": 152.188,
+      "first_paint_ms": 177.241,
+      "settled_ms": 236.037
+    },
+    "find_5000": {
+      "handler_ms": 200.683,
+      "first_paint_ms": 209.022,
+      "settled_ms": 425.547
+    }
+  },
+  "comparison": {
+    "prose_100": {
+      "handler_ms": {
+        "speedup": 2.763,
+        "time_reduction_percent": 63.81
+      },
+      "first_paint_ms": {
+        "speedup": 2.066,
+        "time_reduction_percent": 51.59
+      },
+      "settled_ms": {
+        "speedup": 2.056,
+        "time_reduction_percent": 51.36
+      }
+    },
+    "prose_500": {
+      "handler_ms": {
+        "speedup": 4.931,
+        "time_reduction_percent": 79.72
+      },
+      "first_paint_ms": {
+        "speedup": 4.063,
+        "time_reduction_percent": 75.39
+      },
+      "settled_ms": {
+        "speedup": 3.382,
+        "time_reduction_percent": 70.44
+      }
+    },
+    "prose_5000": {
+      "handler_ms": {
+        "speedup": 5.841,
+        "time_reduction_percent": 82.88
+      },
+      "first_paint_ms": {
+        "speedup": 5.652,
+        "time_reduction_percent": 82.31
+      },
+      "settled_ms": {
+        "speedup": 5.174,
+        "time_reduction_percent": 80.67
+      }
+    },
+    "table_120": {
+      "handler_ms": {
+        "speedup": 4.769,
+        "time_reduction_percent": 79.03
+      },
+      "first_paint_ms": {
+        "speedup": 2.818,
+        "time_reduction_percent": 64.51
+      },
+      "settled_ms": {
+        "speedup": 0.993,
+        "time_reduction_percent": -0.67
+      }
+    },
+    "mixed_500": {
+      "handler_ms": {
+        "speedup": 3.296,
+        "time_reduction_percent": 69.66
+      },
+      "first_paint_ms": {
+        "speedup": 2.935,
+        "time_reduction_percent": 65.93
+      },
+      "settled_ms": {
+        "speedup": 2.348,
+        "time_reduction_percent": 57.41
+      }
+    },
+    "find_5000": {
+      "handler_ms": {
+        "speedup": 6.891,
+        "time_reduction_percent": 85.49
+      },
+      "first_paint_ms": {
+        "speedup": 6.664,
+        "time_reduction_percent": 84.99
+      },
+      "settled_ms": {
+        "speedup": 3.279,
+        "time_reduction_percent": 69.5
+      }
+    }
+  },
+  "process_runs_ms": {
+    "before": [
+      {
+        "prose_100": {
+          "handler_ms": 28.438,
+          "first_paint_ms": 35.424,
+          "settled_ms": 36.684
+        },
+        "prose_500": {
+          "handler_ms": 122.526,
+          "first_paint_ms": 129.693,
+          "settled_ms": 130.908
+        },
+        "prose_5000": {
+          "handler_ms": 1203.047,
+          "first_paint_ms": 1212.222,
+          "settled_ms": 1214.122
+        },
+        "table_120": {
+          "handler_ms": 212.511,
+          "first_paint_ms": 227.425,
+          "settled_ms": 228.772
+        },
+        "mixed_500": {
+          "handler_ms": 501.647,
+          "first_paint_ms": 520.249,
+          "settled_ms": 554.193
+        },
+        "find_5000": {
+          "handler_ms": 1377.105,
+          "first_paint_ms": 1387.528,
+          "settled_ms": 1390.218
+        }
+      },
+      {
+        "prose_100": {
+          "handler_ms": 28.815,
+          "first_paint_ms": 35.77,
+          "settled_ms": 37.629
+        },
+        "prose_500": {
+          "handler_ms": 122.36,
+          "first_paint_ms": 129.588,
+          "settled_ms": 131.474
+        },
+        "prose_5000": {
+          "handler_ms": 1197.99,
+          "first_paint_ms": 1207.21,
+          "settled_ms": 1209.64
+        },
+        "table_120": {
+          "handler_ms": 210.622,
+          "first_paint_ms": 225.622,
+          "settled_ms": 229.063
+        },
+        "mixed_500": {
+          "handler_ms": 502.58,
+          "first_paint_ms": 512.687,
+          "settled_ms": 556.544
+        },
+        "find_5000": {
+          "handler_ms": 1385.893,
+          "first_paint_ms": 1396.071,
+          "settled_ms": 1398.503
+        }
+      },
+      {
+        "prose_100": {
+          "handler_ms": 37.628,
+          "first_paint_ms": 47.366,
+          "settled_ms": 48.93
+        },
+        "prose_500": {
+          "handler_ms": 156.866,
+          "first_paint_ms": 166.98,
+          "settled_ms": 168.649
+        },
+        "prose_5000": {
+          "handler_ms": 1212.46,
+          "first_paint_ms": 1221.359,
+          "settled_ms": 1223.356
+        },
+        "table_120": {
+          "handler_ms": 211.313,
+          "first_paint_ms": 226.416,
+          "settled_ms": 229.9
+        },
+        "mixed_500": {
+          "handler_ms": 500.973,
+          "first_paint_ms": 529.85,
+          "settled_ms": 550.136
+        },
+        "find_5000": {
+          "handler_ms": 1382.807,
+          "first_paint_ms": 1392.969,
+          "settled_ms": 1395.316
+        }
+      }
+    ],
+    "after": [
+      {
+        "prose_100": {
+          "handler_ms": 10.329,
+          "first_paint_ms": 17.146,
+          "settled_ms": 18.269
+        },
+        "prose_500": {
+          "handler_ms": 24.998,
+          "first_paint_ms": 32.032,
+          "settled_ms": 39.131
+        },
+        "prose_5000": {
+          "handler_ms": 200.199,
+          "first_paint_ms": 208.916,
+          "settled_ms": 229.885
+        },
+        "table_120": {
+          "handler_ms": 43.9,
+          "first_paint_ms": 80.357,
+          "settled_ms": 221.742
+        },
+        "mixed_500": {
+          "handler_ms": 157.712,
+          "first_paint_ms": 183.415,
+          "settled_ms": 243.496
+        },
+        "find_5000": {
+          "handler_ms": 201.832,
+          "first_paint_ms": 210.357,
+          "settled_ms": 425.547
+        }
+      },
+      {
+        "prose_100": {
+          "handler_ms": 10.534,
+          "first_paint_ms": 17.315,
+          "settled_ms": 18.302
+        },
+        "prose_500": {
+          "handler_ms": 24.607,
+          "first_paint_ms": 31.663,
+          "settled_ms": 38.87
+        },
+        "prose_5000": {
+          "handler_ms": 211.737,
+          "first_paint_ms": 216.541,
+          "settled_ms": 238.476
+        },
+        "table_120": {
+          "handler_ms": 44.314,
+          "first_paint_ms": 79.203,
+          "settled_ms": 230.587
+        },
+        "mixed_500": {
+          "handler_ms": 152.068,
+          "first_paint_ms": 176.64,
+          "settled_ms": 235.925
+        },
+        "find_5000": {
+          "handler_ms": 199.168,
+          "first_paint_ms": 207.882,
+          "settled_ms": 428.027
+        }
+      },
+      {
+        "prose_100": {
+          "handler_ms": 10.429,
+          "first_paint_ms": 17.491,
+          "settled_ms": 18.506
+        },
+        "prose_500": {
+          "handler_ms": 24.848,
+          "first_paint_ms": 31.917,
+          "settled_ms": 38.853
+        },
+        "prose_5000": {
+          "handler_ms": 205.954,
+          "first_paint_ms": 214.49,
+          "settled_ms": 234.636
+        },
+        "table_120": {
+          "handler_ms": 58.203,
+          "first_paint_ms": 102.427,
+          "settled_ms": 248.756
+        },
+        "mixed_500": {
+          "handler_ms": 152.188,
+          "first_paint_ms": 177.241,
+          "settled_ms": 236.037
+        },
+        "find_5000": {
+          "handler_ms": 200.683,
+          "first_paint_ms": 209.022,
+          "settled_ms": 422.604
+        }
+      }
+    ]
+  },
+  "validation": {
+    "tests": 192,
+    "failed_modules": 0,
+    "strategy": "Modules in separate processes; ribbon, theme, and window geometry methods individually after shared-process timeouts or cancellation. The prior editor-performance report also isolates ribbon and theme methods. Final affected modules rerun after implementation was complete.",
+    "modules": [
+      {
+        "module": "test_bullets.py",
+        "exit_code": 0,
+        "tests": 4,
+        "seconds": 0.48
+      },
+      {
+        "module": "test_cleanup_actions.py",
+        "exit_code": 0,
+        "tests": 2,
+        "seconds": 1.66
+      },
+      {
+        "module": "test_code_markers.py",
+        "exit_code": 0,
+        "tests": 3,
+        "seconds": 0.53
+      },
+      {
+        "module": "test_code_panel.py",
+        "exit_code": 0,
+        "tests": 2,
+        "seconds": 0.47
+      },
+      {
+        "module": "test_document_layout.py",
+        "exit_code": 0,
+        "tests": 9,
+        "seconds": 13.28
+      },
+      {
+        "module": "test_emphasis.py",
+        "exit_code": 0,
+        "tests": 2,
+        "seconds": 0.52
+      },
+      {
+        "module": "test_file_dialog.py",
+        "exit_code": 0,
+        "tests": 6,
+        "seconds": 10.12
+      },
+      {
+        "module": "test_file_switching.py",
+        "exit_code": 0,
+        "tests": 11,
+        "seconds": 36.71
+      },
+      {
+        "module": "test_find.py",
+        "exit_code": 0,
+        "tests": 10,
+        "seconds": 32.87
+      },
+      {
+        "module": "test_heading_panel.py",
+        "exit_code": 0,
+        "tests": 17,
+        "seconds": 64.89
+      },
+      {
+        "module": "test_headings.py",
+        "exit_code": 0,
+        "tests": 5,
+        "seconds": 0.51
+      },
+      {
+        "module": "test_last_file.py",
+        "exit_code": 0,
+        "tests": 3,
+        "seconds": 18.2
+      },
+      {
+        "module": "test_links.py",
+        "exit_code": 0,
+        "tests": 4,
+        "seconds": 0.61
+      },
+      {
+        "module": "test_loading.py",
+        "exit_code": 0,
+        "tests": 10,
+        "seconds": 13.77,
+        "final_validation": true
+      },
+      {
+        "module": "test_numbered_lists.py",
+        "exit_code": 0,
+        "tests": 2,
+        "seconds": 0.44
+      },
+      {
+        "module": "test_panel_updates.py",
+        "exit_code": 0,
+        "tests": 4,
+        "seconds": 1.18,
+        "final_validation": true
+      },
+      {
+        "module": "test_references.py",
+        "exit_code": 0,
+        "tests": 8,
+        "seconds": 0.38
+      },
+      {
+        "module": "test_ribbon.py",
+        "exit_code": 0,
+        "tests": 20,
+        "seconds": 120.06,
+        "initial_exit_code": 124,
+        "isolated_methods": [
+          {
+            "method": "test_ribbon_is_left_and_shows_scratchpad_and_references",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.86
+          },
+          {
+            "method": "test_settings_icon_opens_tabbed_window",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.05
+          },
+          {
+            "method": "test_project_tree_toggles_and_switches_left_panels",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.92
+          },
+          {
+            "method": "test_general_project_location_updates_tree_and_survives_restart",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.77
+          },
+          {
+            "method": "test_project_file_activation_respects_unsaved_changes",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.93
+          },
+          {
+            "method": "test_settings_controls_apply_and_persist",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.56
+          },
+          {
+            "method": "test_settings_close_waits_for_update_worker",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.09
+          },
+          {
+            "method": "test_reference_icons_toggle_and_switch_left_panels",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.98
+          },
+          {
+            "method": "test_hovering_reference_icons_does_not_open_popup_or_panel",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.92
+          },
+          {
+            "method": "test_reference_icons_search_selection_only_when_opening",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.91
+          },
+          {
+            "method": "test_reference_close_button_allows_reopening_from_icon",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.87
+          },
+          {
+            "method": "test_open_reference_without_selection_keeps_existing_search",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.88
+          },
+          {
+            "method": "test_open_reference_ignores_whitespace_selection",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.86
+          },
+          {
+            "method": "test_ctrl_l_searches_hovered_word_and_preserves_selection",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.93
+          },
+          {
+            "method": "test_ctrl_l_ignores_whitespace_punctuation_and_outside_document",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.73
+          },
+          {
+            "method": "test_ctrl_l_resolves_word_after_scrolling",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.72
+          },
+          {
+            "method": "test_switching_reference_and_scratchpad_preserves_notes",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.7
+          },
+          {
+            "method": "test_auto_hide_reveal_leave_and_pin",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 5.81
+          },
+          {
+            "method": "test_slide_and_return_during_close",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.72
+          },
+          {
+            "method": "test_preference_survives_reopening_and_heading_setting",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.32
+          }
+        ]
+      },
+      {
+        "module": "test_scratchpad.py",
+        "exit_code": 0,
+        "tests": 6,
+        "seconds": 9.94
+      },
+      {
+        "module": "test_shutdown.py",
+        "exit_code": 0,
+        "tests": 1,
+        "seconds": 2.26,
+        "final_validation": true
+      },
+      {
+        "module": "test_source_stats.py",
+        "exit_code": 0,
+        "tests": 3,
+        "seconds": 0.86,
+        "final_validation": true
+      },
+      {
+        "module": "test_spelling.py",
+        "exit_code": 0,
+        "tests": 5,
+        "seconds": 15.36
+      },
+      {
+        "module": "test_spelling_batches.py",
+        "exit_code": 0,
+        "tests": 8,
+        "seconds": 2.09
+      },
+      {
+        "module": "test_tables_rules.py",
+        "exit_code": 0,
+        "tests": 11,
+        "seconds": 0.7,
+        "final_validation": true
+      },
+      {
+        "module": "test_themes.py",
+        "exit_code": 0,
+        "tests": 10,
+        "seconds": 90.29,
+        "initial_exit_code": -15,
+        "isolated_methods": [
+          {
+            "method": "test_registration_tokens_and_contrast",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.81
+          },
+          {
+            "method": "test_semantic_token_defaults_and_overrides",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.91
+          },
+          {
+            "method": "test_bracketed_text_uses_its_token",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.56
+          },
+          {
+            "method": "test_switch_preserves_document_and_typography",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.7
+          },
+          {
+            "method": "test_selection_persists_and_restores",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 6.55
+          },
+          {
+            "method": "test_switch_keeps_selected_font_size",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 3.44
+          },
+          {
+            "method": "test_persistence_in_a_new_process",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 3.75
+          },
+          {
+            "method": "test_switch_preserves_clean_file_and_serialization",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.45
+          },
+          {
+            "method": "test_invalid_saved_id_falls_back_and_system_is_available",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.19
+          },
+          {
+            "method": "test_source_highlighting_and_plain_text_mode",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.68
+          }
+        ]
+      },
+      {
+        "module": "test_title_path.py",
+        "exit_code": 0,
+        "tests": 4,
+        "seconds": 4.02
+      },
+      {
+        "module": "test_update_helper.py",
+        "exit_code": 0,
+        "tests": 1,
+        "seconds": 0.36
+      },
+      {
+        "module": "test_update_scheduling.py",
+        "exit_code": 0,
+        "tests": 5,
+        "seconds": 9.65,
+        "final_validation": true
+      },
+      {
+        "module": "test_updater.py",
+        "exit_code": 0,
+        "tests": 7,
+        "seconds": 0.33
+      },
+      {
+        "module": "test_window_geometry.py",
+        "exit_code": 0,
+        "tests": 9,
+        "seconds": 120.09,
+        "initial_exit_code": 124,
+        "isolated_methods": [
+          {
+            "method": "test_platform_selection_preserves_explicit_choices_and_wayland_only_sessions",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.48
+          },
+          {
+            "method": "test_restores_normal_size_and_position",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.64
+          },
+          {
+            "method": "test_restores_window_aligned_to_right_screen_edge",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 2.92
+          },
+          {
+            "method": "test_restores_maximized_state_and_previous_normal_geometry",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 3.06
+          },
+          {
+            "method": "test_cancelled_close_does_not_replace_saved_geometry",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.71
+          },
+          {
+            "method": "test_close_button_works_with_each_menu_open",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 7.85
+          },
+          {
+            "method": "test_close_from_menu_can_be_cancelled_for_unsaved_changes",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.88
+          },
+          {
+            "method": "test_close_hover_matches_normal_appearance_with_menus_open",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 0.92
+          },
+          {
+            "method": "test_minimized_window_reopens_visible",
+            "exit_code": 0,
+            "tests": 1,
+            "seconds": 1.68
+          }
+        ]
+      }
+    ]
+  }
+}
