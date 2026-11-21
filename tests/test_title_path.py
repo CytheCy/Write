@@ -1,4 +1,4 @@
-"""The title hover card follows the current file and keeps its actions usable."""
+"""The path hover card follows each tab and keeps its actions usable."""
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
@@ -41,7 +41,7 @@ class TitlePathTests(unittest.TestCase):
         self.assertTrue(QTest.qWaitForWindowActive(self.window))
         self.window.editor.setFocus()
         hover_timeout = QSignalSpy(self.popup.show_timer.timeout)
-        self.app.sendEvent(self.window.title_label, QEvent(QEvent.Type.Enter))
+        QTest.mouseMove(self.window.tab_bar, self.window.tab_bar.tabRect(0).topLeft() + QPoint(10, 10))
         self.assertTrue(hover_timeout.wait(2000), 'Document path hover timer did not fire')
         self.assertTrue(self.popup.isVisible())
         self.assertEqual(self.popup.path_label.text(), str(self.path))
@@ -56,6 +56,51 @@ class TitlePathTests(unittest.TestCase):
         with patch('main.QDesktopServices.openUrl', return_value=True) as open_url:
             QTest.mouseClick(self.popup.folder_button, Qt.MouseButton.LeftButton)
         open_url.assert_called_once_with(QUrl.fromLocalFile(str(self.path.parent)))
+        self.assertFalse(self.popup.isVisible())
+
+    def test_hover_another_tab_updates_position_path_and_actions(self):
+        other = self.path.parent / 'another folder' / 'other.md'
+        other.parent.mkdir()
+        other.write_text('Other')
+        self.window.open_file(other)
+        self.app.processEvents()
+        self.window.editor.setFocus()
+        bar = self.window.tab_bar
+        timeout = QSignalSpy(self.popup.show_timer.timeout)
+        QTest.mouseMove(bar, bar.tabRect(0).topLeft() + QPoint(10, 10))
+        self.assertTrue(timeout.wait(2000))
+        self.assertEqual(self.popup.path, self.path)
+        self.assertEqual(self.popup.pos(), bar.mapToGlobal(bar.tabRect(0).bottomLeft()) + QPoint(0, 1))
+        self.assertEqual(self.window.current_file, other)
+        self.assertIs(self.app.focusWidget(), self.window.editor)
+
+        QTest.mouseMove(bar, bar.tabRect(1).topLeft() + QPoint(10, 10))
+        self.assertTrue(self.popup.isVisible())
+        self.assertEqual(self.popup.path_label.text(), str(other))
+        self.assertEqual(self.popup.pos(), bar.mapToGlobal(bar.tabRect(1).bottomLeft()) + QPoint(0, 1))
+        QTest.mouseClick(self.popup.copy_button, Qt.MouseButton.LeftButton)
+        self.assertEqual(self.app.clipboard().text(), str(other))
+        with patch('main.QDesktopServices.openUrl', return_value=True) as open_url:
+            QTest.mouseClick(self.popup.folder_button, Qt.MouseButton.LeftButton)
+        open_url.assert_called_once_with(QUrl.fromLocalFile(str(other.parent)))
+
+    def test_hover_unsaved_tab_and_active_title_refresh(self):
+        self.window.new_file()
+        bar = self.window.tab_bar
+        timeout = QSignalSpy(self.popup.show_timer.timeout)
+        QTest.mouseMove(bar, bar.tabRect(0).topLeft() + QPoint(10, 10))
+        self.assertTrue(timeout.wait(2000))
+        self.window.editor.insertPlainText('Draft')
+        self.assertEqual(self.popup.path, self.path)
+        QTest.mouseMove(bar, bar.tabRect(1).topLeft() + QPoint(10, 10))
+        self.assertEqual(self.popup.path_label.text(), 'Not saved yet')
+        self.assertFalse(self.popup.copy_button.isEnabled())
+        self.assertFalse(self.popup.folder_button.isEnabled())
+
+    def test_blank_tab_bar_space_does_not_show_card(self):
+        bar = self.window.tab_bar
+        QTest.mouseMove(bar, QPoint(bar.width() - 5, bar.height() // 2))
+        self.assertFalse(self.popup.show_timer.isActive())
         self.assertFalse(self.popup.isVisible())
 
     def test_switch_new_and_save_as_refresh_path(self):

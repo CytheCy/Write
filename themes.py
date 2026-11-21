@@ -127,8 +127,10 @@ def stylesheet(t):
             background: {t['editor']}; color: {t['text']};
             selection-background-color: {t['selection']}; selection-color: {t['selection_text']}; }}
         #editor {{ border: none; }}
-        #headingPanel, #scratchpadPanel, #projectPanel, #leftPanels {{ background: {t['sidebar']}; }}
+        #headingPanel, #scratchpadPanel, #projectPanel, #projectSearchPanel, #leftPanels {{ background: {t['sidebar']}; }}
         #scratchpadEditor {{ border: none; }}
+        #projectSearchResults {{ background: {t['sidebar']}; border: none; }}
+        #projectSearchResults::item:hover {{ background: {t['hover']}; }}
         #referencePanel, #referencePanel QScrollArea, #referencePanel QScrollArea > QWidget > QWidget {{
             background: {t['sidebar']}; }}
         #referencePanel QFrame.resultCard {{ background: {t['panel']};
@@ -193,8 +195,11 @@ def stylesheet(t):
         QScrollBar::handle:hover {{ background: {t['secondary']}; }}
         QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
         QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
-        QTabBar::tab {{ background: {t['inactive_tab']}; padding: 7px; }}
-        QTabBar::tab:selected {{ background: {t['active_tab']}; border-bottom: 2px solid {t['accent']}; }}
+        QTabBar#documentTabs::tab {{ background: transparent; border: none;
+            padding: 8px 18px; min-width: 110px; max-width: 220px; }}
+        QToolButton#tabCloseButton {{ background: transparent; border: none;
+            border-radius: 4px; padding: 0; }}
+        QToolButton#tabCloseButton:hover {{ background: {t['hover']}; }}
     '''
 
 

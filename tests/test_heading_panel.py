@@ -152,6 +152,7 @@ class HeadingPanelTests(unittest.TestCase):
             self.assertEqual(w.heading_list.count(), 2)
             self.assertTrue(w.heading_panel.isVisible())
             w.heading_state_actions['closed'].trigger()
+            self.finish_panel_animation()
             w.open_file(md)
             self.assertFalse(w.heading_panel.isVisible())
             w.open_file(txt)

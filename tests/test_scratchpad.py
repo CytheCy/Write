@@ -68,13 +68,16 @@ class ScratchpadTests(unittest.TestCase):
         self.assertTrue(w.save_file())
         self.assertEqual(self.path.read_text(), BLOCK + 'New paragraph\n# Main\nVisible words\n')
 
-    def test_scratch_edits_save_undo_and_prompt_on_switch(self):
+    def test_scratch_edits_survive_new_tab_and_save_undo(self):
         w = self.window
         w.scratchpad_editor.moveCursor(QTextCursor.MoveOperation.End)
         w.scratchpad_editor.insertPlainText('\nAnother thought')
         self.assertTrue(w.has_unsaved_changes())
-        with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Cancel):
+        with patch.object(QMessageBox, 'exec') as prompt:
             w.new_file()
+            self.assertEqual(w.scratchpad_editor.toPlainText(), '')
+            w.activate_tab(0)
+        prompt.assert_not_called()
         self.assertEqual(w.current_file, self.path)
         w.scratchpad_editor.undo()
         self.assertFalse(w.has_unsaved_changes())

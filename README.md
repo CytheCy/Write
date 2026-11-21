@@ -53,7 +53,9 @@ The installer creates a local virtual environment and adds Write to the KDE appl
 python3 main.py [note.md]
 ```
 
-Use **File → Open…** to open a note, or drag a file onto the editor. Markdown source stays directly editable while headings, emphasis, code, links, lists, and quotes receive visual styling. Heading `#` markers stay hidden until you click or move the cursor onto that line, and hide again when you leave it. Empty headings keep their `#` visible.
+Use **File → Open…** to open a note, or drag files onto the editor. Each note opens in a tab on the top row between File and the window controls. Click a tab to switch documents; each keeps its edits, undo history, selection, scroll position, and scratchpad. Opening an already open file selects its tab. Close a tab with its × button or **Ctrl+W**; unsaved changes prompt you to save, discard, or cancel. **Ctrl+Tab** and **Ctrl+Shift+Tab** cycle through tabs.
+
+Markdown source stays directly editable while headings, emphasis, code, links, lists, and quotes receive visual styling. Heading `#` markers stay hidden until you click or move the cursor onto that line, and hide again when you leave it. Empty headings keep their `#` visible.
 
 On launch, Write reopens the last file you opened or saved. Opening a note through your file manager opens that note instead.
 
@@ -75,9 +77,11 @@ Use **File → Open Recent** to reopen one of your last 10 opened or saved files
 
 Use **File → Reload Document** to reread the current file from disk. If you have unsaved changes, Write asks whether to save, discard, or cancel before reloading.
 
-The folder icon at the top of the left ribbon toggles the **Project tree** panel. Choose its root folder in **Settings → General → Project tree location**; your choice is saved across restarts. Expand folders and double-click a file (or press Enter) to open it. Switching files uses the usual save/discard/cancel prompt for unsaved changes.
+The folder icon at the top of the left ribbon toggles the **Project tree** panel. Choose its root folder in **Settings → General → Project tree location**; your choice is saved across restarts. Expand folders and click a file (or press Enter) to replace the current document. Unsaved changes prompt you to save, discard, or cancel. **Ctrl+click** a file to open it in a new tab, keeping the current document open.
 
-The toolbar ribbon on the left displays the **Scatchpad** notepad button. Click it to toggle an editable Markdown panel on the left. Scratch notes are saved as metadata in the same Markdown file and stay out of the main document, headings, search, and word count. For example, this block in a Markdown file displays only its contents, starting with `# hi`, in the Scatchpad:
+Click the **Search project** magnifying glass below the Project tree icon to search text throughout that folder and its subfolders. Results show collapsible file groups, match counts, and highlighted excerpts. Click an excerpt to open and select its match; use the sort menu to reverse filename order. Search includes unsaved edits in open files, ignores case, and treats the query as literal text. Binary files, symbolic links, and `.git` internals are skipped. Broad searches show the first 2,000 matches; refine the query to find more.
+
+The toolbar ribbon on the left displays the **Scatchpad** notepad button. Click it to toggle an editable Markdown panel on the left. Scratch notes are saved as metadata in the same Markdown file and stay out of the main document, headings, in-document search, and word count. For example, this block in a Markdown file displays only its contents, starting with `# hi`, in the Scatchpad:
 
 ```markdown
 ---
@@ -121,7 +125,7 @@ Use **Settings → Appearance → Font size** to choose a text size from 6 to 72
 
 Use **Settings → Appearance → Maximum page width** to limit the text page width in pixels (950 px by default). Wider windows add margins on both sides to keep the page centered; narrower windows wrap the text to fit. The setting is remembered across restarts. Set it to **Unlimited** (0) to use the full available width.
 
-Use `Ctrl+N` for a new note, `Ctrl+O` to open a file, `Ctrl+S` to save, and `Ctrl+Shift+S` to save as. Unsaved changes are confirmed before closing or changing files.
+Use `Ctrl+N` for a new note, `Ctrl+O` to open a file, `Ctrl+S` to save, and `Ctrl+Shift+S` to save as. Unsaved changes are confirmed before closing a tab, closing the window, or reloading a document.
 
 The window remembers its size, position, and maximized state when you close it and restores them at the next launch.
 On Wayland desktops, Write uses XWayland when available so it can restore the window's position. An explicit `QT_QPA_PLATFORM` setting takes precedence.
@@ -144,9 +148,8 @@ file-type icons remain platform controlled.
 palette, and application stylesheets. `main.py` uses the same tokens for source
 Markdown highlighting and the theme selector. Ordinary prose stays in the body
 color; headings, lists, quotes, code, and links receive restrained accents. The
-editor remains a source editor: there is no rendered preview, search UI,
-tab system, or YAML-specific highlighter. Tokens for these roles are available
-without adding those features.
+editor remains a source editor with document tabs and search; there is no
+rendered preview or YAML-specific highlighter.
 
 ## Validation
 

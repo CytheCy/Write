@@ -93,7 +93,7 @@ class FileDialogTests(unittest.TestCase):
             self.window.editor.insertPlainText('Changed ')
             self.window.editor.document().setModified(False)
             self.window.update_title()
-            self.assertEqual(self.window.title_label.toolTip(), 'note.md*')
+            self.assertEqual(self.window.tab_bar.tabText(self.window.tab_bar.currentIndex()), 'note.md*')
 
             with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Cancel) as prompt:
                 self.assertFalse(self.window.close())
@@ -106,10 +106,10 @@ class FileDialogTests(unittest.TestCase):
             path.write_text('Original')
             self.assertTrue(self.window.open_file(path))
             self.window.editor.insertPlainText('Changed ')
-            self.assertEqual(self.window.title_label.toolTip(), 'note.md*')
+            self.assertEqual(self.window.tab_bar.tabText(self.window.tab_bar.currentIndex()), 'note.md*')
             self.window.editor.undo()
-            self.assertEqual(self.window.title_label.toolTip(), 'note.md')
+            self.assertEqual(self.window.tab_bar.tabText(self.window.tab_bar.currentIndex()), 'note.md')
             self.window.editor.insertPlainText('Saved ')
             self.assertTrue(self.window.save_file())
-            self.assertEqual(self.window.title_label.toolTip(), 'note.md')
+            self.assertEqual(self.window.tab_bar.tabText(self.window.tab_bar.currentIndex()), 'note.md')
             self.assertFalse(self.window.has_unsaved_changes())

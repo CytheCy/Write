@@ -36,6 +36,7 @@ class RibbonTests(unittest.TestCase):
 
     def tearDown(self):
         self.window._saved_text = self.window.editor.toPlainText()
+        self.window._updating = True
         self.window.close()
         self.window.deleteLater()
         self.app.processEvents()
@@ -45,24 +46,27 @@ class RibbonTests(unittest.TestCase):
         self.assertTrue(w.ribbon.isVisible())
         self.assertLess(w.ribbon.mapTo(w, QPoint()).x(), w.editor.mapTo(w, QPoint()).x())
         buttons = w.ribbon.findChildren(QToolButton)
-        self.assertEqual(len(buttons), 6)
+        self.assertEqual(len(buttons), 7)
         self.assertEqual(buttons[0].icon_name, 'folder-open')
         self.assertEqual(buttons[0].accessibleName(), 'Project Tree')
-        self.assertEqual(buttons[1].icon_name, 'notepad')
-        self.assertEqual(buttons[1].accessibleName(), 'Scatchpad')
+        self.assertEqual(buttons[1].icon_name, 'search')
+        self.assertEqual(buttons[1].accessibleName(), 'Search project')
         self.assertGreater(buttons[1].y(), buttons[0].y())
-        self.assertEqual(buttons[2].icon_name, 'sort-a-z')
-        self.assertEqual(buttons[2].accessibleName(), 'Dictionary')
-        self.assertEqual(buttons[3].icon_name, 'thesaurus')
-        self.assertEqual(buttons[3].accessibleName(), 'Thesaurus')
-        self.assertGreater(buttons[2].y(), buttons[1].y())
-        self.assertEqual(buttons[4].icon_name, 'whale')
-        self.assertEqual(buttons[4].accessibleName(), 'Moby Thesaurus')
+        self.assertEqual(buttons[2].icon_name, 'notepad')
+        self.assertEqual(buttons[2].accessibleName(), 'Scatchpad')
+        self.assertGreater(buttons[2].y(), buttons[0].y())
+        self.assertEqual(buttons[3].icon_name, 'sort-a-z')
+        self.assertEqual(buttons[3].accessibleName(), 'Dictionary')
+        self.assertEqual(buttons[4].icon_name, 'thesaurus')
+        self.assertEqual(buttons[4].accessibleName(), 'Thesaurus')
         self.assertGreater(buttons[3].y(), buttons[2].y())
+        self.assertEqual(buttons[5].icon_name, 'whale')
+        self.assertEqual(buttons[5].accessibleName(), 'Moby Thesaurus')
         self.assertGreater(buttons[4].y(), buttons[3].y())
-        self.assertEqual(buttons[5].icon_name, 'cog')
-        self.assertEqual(buttons[5].accessibleName(), 'Settings')
-        self.assertEqual(w.ribbon.height() - buttons[5].geometry().bottom() - 1, 10)
+        self.assertGreater(buttons[5].y(), buttons[4].y())
+        self.assertEqual(buttons[6].icon_name, 'cog')
+        self.assertEqual(buttons[6].accessibleName(), 'Settings')
+        self.assertEqual(w.ribbon.height() - buttons[6].geometry().bottom() - 1, 10)
 
     def test_settings_icon_opens_tabbed_window(self):
         w = self.window
@@ -140,7 +144,7 @@ class RibbonTests(unittest.TestCase):
             self.assertEqual(self.window.project_model.filePath(
                 self.window.project_tree.rootIndex()), folder)
 
-    def test_project_file_activation_respects_unsaved_changes(self):
+    def test_project_file_activation_confirms_replacing_unsaved_tab(self):
         w = self.window
         with tempfile.TemporaryDirectory() as folder:
             note = Path(folder) / 'note.md'
@@ -154,14 +158,18 @@ class RibbonTests(unittest.TestCase):
                 w.project_tree.activated.emit(w.project_tree.rootIndex())
                 open_file.assert_not_called()
             w.editor.setPlainText('Unsaved writing')
-            with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Cancel):
-                w.project_tree.activated.emit(index)
-            self.assertEqual(w.editor.toPlainText(), 'Unsaved writing')
+            w.project_tree.setCurrentIndex(index)
+            with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Cancel) as prompt:
+                QTest.keyClick(w.project_tree, Qt.Key.Key_Return)
+            prompt.assert_called_once()
             self.assertIsNone(w.current_file)
+            self.assertEqual(w.editor.toPlainText(), 'Unsaved writing')
+            self.assertTrue(w.has_unsaved_changes())
             with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Discard):
-                w.project_tree.activated.emit(index)
+                QTest.keyClick(w.project_tree, Qt.Key.Key_Return)
             self.assertEqual(w.current_file, note)
             self.assertEqual(w.editor.toPlainText(), '# Project note')
+            self.assertEqual(w.tab_bar.count(), 1)
 
     def test_settings_controls_apply_and_persist(self):
         w = self.window

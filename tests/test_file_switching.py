@@ -1,4 +1,4 @@
-"""Switching notes saves or discards the current note before replacing it."""
+"""Tabbed notes preserve drafts; explicit reload still confirms replacement."""
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import tempfile
@@ -38,6 +38,7 @@ class FileSwitchingTests(unittest.TestCase):
     def tearDown(self):
         self.window._saved_text = self.window.editor.toPlainText()
         self.window.editor.document().setModified(False)
+        self.window._updating = True
         self.window.close()
         self.window.deleteLater()
         self.app.processEvents()
@@ -55,46 +56,30 @@ class FileSwitchingTests(unittest.TestCase):
         self.assertFalse(self.window.editor.document().isUndoAvailable())
         self.assertEqual(self.settings.value('last_open_file'), str(self.second))
 
-    def test_save_writes_first_before_opening_second(self):
+    def test_open_preserves_unsaved_document_without_prompt(self):
         changed = self.edit_first()
-        # Source comparison still catches changes if Qt clears its dirty flag.
         self.window.editor.document().setModified(False)
-        with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Save) as prompt:
+        with patch.object(QMessageBox, 'exec') as prompt:
             self.assertTrue(self.window.open_file(self.second))
-        prompt.assert_called_once()
-        self.assertEqual(self.first.read_text(), changed)
-        self.assert_second_open()
-
-    def test_discard_keeps_first_on_disk_and_opens_second(self):
-        self.edit_first()
-        with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Discard):
-            self.assertTrue(self.window.open_file(self.second))
-        self.assertEqual(self.first.read_text(), self.original)
-        self.assert_second_open()
-
-    def test_cancel_or_dismiss_preserves_current_note(self):
-        changed = self.edit_first()
-        for choice in (QMessageBox.StandardButton.Cancel, 0):
-            with self.subTest(choice=choice), patch.object(QMessageBox, 'exec', return_value=choice):
-                self.assertFalse(self.window.open_file(self.second))
-            self.assertEqual(self.window.current_file, self.first)
-            self.assertEqual(self.window.editor.toPlainText(), changed)
-            self.assertEqual(self.first.read_text(), self.original)
-
-    def test_save_failure_aborts_switch(self):
-        changed = self.edit_first()
-        with (patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Save),
-              patch.object(self.window, 'save_file', return_value=False)):
-            self.assertFalse(self.window.open_file(self.second))
-        self.assertEqual(self.window.current_file, self.first)
+            self.assert_second_open()
+            self.assertTrue(self.window.open_file(self.first))
+        prompt.assert_not_called()
         self.assertEqual(self.window.editor.toPlainText(), changed)
+        self.assertTrue(self.window.has_unsaved_changes())
+        self.assertTrue(self.window.editor.document().isUndoAvailable())
+        self.assertEqual(self.first.read_text(), self.original)
+        self.window.editor.undo()
+        self.assertEqual(self.window.editor.toPlainText(), self.original)
+        self.assertFalse(self.window.has_unsaved_changes())
 
-    def test_cancel_save_as_preserves_untitled_note(self):
+    def test_untitled_draft_survives_opening_file(self):
         self.window.new_file()
         self.window.editor.insertPlainText('Untitled changes')
-        with (patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Save),
-              patch('main.QFileDialog.getSaveFileName', return_value=('', ''))):
-            self.assertFalse(self.window.open_file(self.second))
+        index = self.window._active_tab
+        with patch.object(QMessageBox, 'exec') as prompt:
+            self.window.open_file(self.second)
+            self.window.activate_tab(index)
+        prompt.assert_not_called()
         self.assertIsNone(self.window.current_file)
         self.assertEqual(self.window.editor.toPlainText(), 'Untitled changes')
 

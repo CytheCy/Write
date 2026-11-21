@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PySide6.QtCore import (
     QAbstractAnimation, QByteArray, QCoreApplication, QEasingCurve, QEvent, QEventLoop,
-    QObject, QRect, QRectF, QSaveFile, QSettings, Qt, QTimer, QUrl, QVariantAnimation, Signal, Slot,
+    QObject, QPoint, QRect, QRectF, QSaveFile, QSettings, Qt, QTimer, QUrl, QVariantAnimation, Signal, Slot,
 )
 from PySide6.QtDBus import QDBusConnection, QDBusInterface, QDBusMessage
 from PySide6.QtGui import (
@@ -61,6 +61,10 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QSplitter,
     QStackedWidget,
+    QStyle,
+    QStyleOptionTab,
+    QStylePainter,
+    QTabBar,
     QTextEdit,
     QToolButton,
     QToolTip,
@@ -75,6 +79,7 @@ from themes import (THEMES, apply_application_theme, resolve_theme, saved_theme_
 from spelling import Spelling
 from references import ReferenceTools
 from updater import UpdatesDialog
+from project_search import ProjectSearchPanel
 from settings_ui import SettingsDialog
 
 
@@ -825,6 +830,7 @@ class NoteEditor(QTextEdit):
         removed = old_document.characterCount() - 1
         self.documentAboutToChange.emit()
         old_document.contentsChange.disconnect(self.on_contents_change)
+        old_document.documentLayout().documentSizeChanged.disconnect(self.update_scroll_range)
         self.reset_document_state()
         self._loading_document = True
         self._defer_tables = defer_presentation
@@ -848,6 +854,8 @@ class NoteEditor(QTextEdit):
         formatting_cursor.mergeBlockFormat(block_format)
         document.setUndoRedoEnabled(True)
         document.blockSignals(False)
+        if old_document.property("tabRetained"):
+            self.source_stats = SourceStats()
         self.source_stats.update(document, 0, document.characterCount() - 1)
         old_document.modificationChanged.disconnect(self.modificationChanged)
         # Swap complete documents rather than deleting live paragraphs inside
@@ -870,7 +878,37 @@ class NoteEditor(QTextEdit):
         self.sourceEdited.emit(0, removed, document.characterCount() - 1)
         self.sourceChanged.emit()
         # Let source consumers release old block/cursor references first.
-        old_document.deleteLater()
+        if not old_document.property("tabRetained"):
+            old_document.deleteLater()
+        self.update_scroll_range()
+
+    def restore_tab_document(self, document, stats):
+        """Attach a retained document with its undo stack and source statistics."""
+        old = self.document()
+        self.documentAboutToChange.emit()
+        old.contentsChange.disconnect(self.on_contents_change)
+        old.modificationChanged.disconnect(self.modificationChanged)
+        old.documentLayout().documentSizeChanged.disconnect(self.update_scroll_range)
+        self.reset_document_state()
+        self._loading_document = True
+        highlighter = getattr(self, 'highlighter', None)
+        if highlighter:
+            highlighter.setParent(self)
+            highlighter.setDocument(None)
+        old.setParent(None)
+        self.setDocument(document)
+        old.setParent(self)
+        if not old.property("tabRetained"):
+            old.deleteLater()
+        self.source_stats = stats
+        document.contentsChange.connect(self.on_contents_change)
+        document.modificationChanged.connect(self.modificationChanged)
+        document.documentLayout().documentSizeChanged.connect(self.update_scroll_range)
+        if highlighter:
+            highlighter.setDocument(document)
+            highlighter.rehighlight()
+        self._loading_document = False
+        self.sourceChanged.emit()
         self.update_scroll_range()
 
     def clear(self):
@@ -934,6 +972,7 @@ class NoteEditor(QTextEdit):
                 self._panels_dirty = True
             return
         if old is not None and (old.text, old.state, old.kind) == (text, state, kind):
+            self._panel_blocks[id(old)] = old
             return
         if not isinstance(cache, HeadingBlockData):
             cache = HeadingBlockData()
@@ -1644,6 +1683,75 @@ class BoxIconButton(QToolButton):
             painter, QRectF((self.width() - 18) / 2, (self.height() - 18) / 2, 18, 18))
 
 
+class DocumentTabBar(QTabBar):
+    """Draw document tabs that flow into the surface below the title row."""
+
+    def tabInserted(self, index):  # noqa: N802
+        super().tabInserted(index)
+        button = BoxIconButton("x", self)
+        button.setObjectName("tabCloseButton")
+        button.setFixedSize(48, 22)
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        button.setAccessibleName("Close document")
+        button.setToolTip("Close document")
+        button.clicked.connect(lambda: self.close_button_clicked(button))
+        self.setTabButton(index, QTabBar.ButtonPosition.RightSide, button)
+
+    def close_button_clicked(self, button):
+        for index in range(self.count()):
+            if self.tabButton(index, QTabBar.ButtonPosition.RightSide) is button:
+                self.tabCloseRequested.emit(index)
+                return
+
+    def paintEvent(self, event):  # noqa: N802
+        theme = self.window().theme
+        painter = QStylePainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor(theme['toolbar']))
+        baseline = self.height() - 0.5
+        painter.setPen(QColor(theme['border']))
+        painter.drawLine(QPoint(0, self.height() - 1),
+                         QPoint(self.width(), self.height() - 1))
+
+        # Quiet separators distinguish the inactive documents without boxes.
+        selected = self.currentIndex()
+        for index in range(self.count()):
+            rect = self.tabRect(index)
+            if index != selected and index + 1 != selected:
+                painter.drawLine(QPoint(rect.right(), 10),
+                                 QPoint(rect.right(), self.height() - 10))
+
+        if selected >= 0:
+            rect = self.tabRect(selected)
+            radius = min(10.0, self.height() / 3)
+            left, right = rect.left() + radius, rect.right() - radius
+            top = 3.5
+            # The lower corners turn outward, merging the tab into the page.
+            outline = QPainterPath()
+            outline.moveTo(left - radius, baseline)
+            outline.quadTo(left, baseline, left, baseline - radius)
+            outline.lineTo(left, top + radius)
+            outline.quadTo(left, top, left + radius, top)
+            outline.lineTo(right - radius, top)
+            outline.quadTo(right, top, right, top + radius)
+            outline.lineTo(right, baseline - radius)
+            outline.quadTo(right, baseline, right + radius, baseline)
+            surface = QPainterPath(outline)
+            surface.lineTo(right + radius, self.height())
+            surface.lineTo(left - radius, self.height())
+            surface.closeSubpath()
+            painter.fillPath(surface, QColor(theme['active_tab']))
+            painter.drawPath(outline)
+
+        # Keep Qt's text elision, close buttons, scrolling and hit testing.
+        for index in range(self.count()):
+            option = QStyleOptionTab()
+            self.initStyleOption(option, index)
+            option.palette.setColor(QPalette.ColorRole.WindowText,
+                                    QColor(theme['text' if index == selected else 'secondary']))
+            painter.drawControl(QStyle.ControlElement.CE_TabBarTabLabel, option)
+
+
 class WindowMenuBar(QMenuBar):
     """Allow the empty part of the menu row to move or maximize the window."""
 
@@ -1667,6 +1775,10 @@ class WindowMenuBar(QMenuBar):
             button.update()
 
     def eventFilter(self, watched, event):  # noqa: N802
+        if (watched is getattr(self.window(), "left_panels", None)
+                and event.type() in (QEvent.Type.Move, QEvent.Type.Resize,
+                                     QEvent.Type.Show, QEvent.Type.Hide)):
+            self.position_title()
         if event.type() == QEvent.Type.MouseMove:
             popup = QApplication.activePopupWidget()
             # Keep tracking until the pointer leaves, even if the menu has
@@ -1704,16 +1816,17 @@ class WindowMenuBar(QMenuBar):
     def position_title(self):
         if not hasattr(self, "title_label"):
             return
-        center = self.width() // 2
-        menus_end = self.actionGeometry(self.actions()[-1]).right() + 14
+        menus_end = self.actionGeometry(self.actions()[-1]).right() + 10
+        tabs_start = menus_end
+        left_panel = getattr(self.window(), "left_panels", None)
+        if left_panel is not None and left_panel.isVisible():
+            panel_end = self.mapFromGlobal(left_panel.mapToGlobal(QPoint(left_panel.width(), 0))).x()
+            tabs_start = max(menus_end, panel_end)
         controls = self.cornerWidget(Qt.Corner.TopRightCorner)
-        controls_start = self.width() - controls.width() - 14 if controls else self.width() - 14
-        width = max(0, min(280, 2 * min(center - menus_end, controls_start - center)))
-        self.title_label.setGeometry(center - width // 2, 0, width, self.height())
-        self.title_label.setText(self.title_label.fontMetrics().elidedText(
-            self.title_label.toolTip(), Qt.TextElideMode.ElideMiddle, width
-        ))
-        self.title_label.setVisible(width > 20)
+        controls_start = self.width() - controls.width() - 12 if controls else self.width() - 12
+        # Leave an empty grip beside the tabs for moving the frameless window.
+        self.title_label.setGeometry(tabs_start, 3, max(0, controls_start - tabs_start - 40),
+                                     self.height() - 3)
 
     def mousePressEvent(self, event):  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton and self.actionAt(event.pos()) is None:
@@ -1737,6 +1850,7 @@ class DocumentPathPopup(QFrame):
         super().__init__(owner, Qt.WindowType.ToolTip)
         self.owner = owner
         self.title_label = title_label
+        self.hovered_tab = None
         self.path = None
         self.setObjectName("documentPathPopup")
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
@@ -1767,6 +1881,7 @@ class DocumentPathPopup(QFrame):
         self.hide_timer.setSingleShot(True)
         self.hide_timer.setInterval(250)
         self.hide_timer.timeout.connect(self.hide_if_outside)
+        title_label.setMouseTracking(True)
         title_label.installEventFilter(self)
 
     @property
@@ -1781,6 +1896,29 @@ class DocumentPathPopup(QFrame):
         if self.isVisible():
             self.show_for_title()
 
+    def refresh_path(self):
+        index = self.hovered_tab
+        if index is None:
+            index = self.owner._active_tab
+        path = (self.owner._tabs[index].get('path')
+                if 0 <= index < len(self.owner._tabs) else None)
+        self.set_path(path)
+
+    def hover_tab(self, position):
+        index = self.title_label.tabAt(position)
+        if index < 0:
+            self.show_timer.stop()
+            self.hide_timer.start()
+            return
+        self.hide_timer.stop()
+        if index != self.hovered_tab:
+            self.hovered_tab = index
+            self.refresh_path()
+            if not self.isVisible():
+                self.show_timer.start()
+        elif not self.isVisible() and not self.show_timer.isActive():
+            self.show_timer.start()
+
     def copy_path(self):
         if self.path is not None:
             QApplication.clipboard().setText(str(self.path))
@@ -1793,12 +1931,18 @@ class DocumentPathPopup(QFrame):
     def show_for_title(self):
         if not self.title_label.isVisible() or not self.owner.isActiveWindow():
             return
+        index = self.hovered_tab
+        if index is None:
+            index = self.owner._active_tab
+        if not 0 <= index < self.title_label.count():
+            return
+        tab_rect = self.title_label.tabRect(index)
         area = self.title_label.screen().availableGeometry()
         text_width = self.path_label.fontMetrics().horizontalAdvance(self.path_label.text())
         self.setFixedWidth(min(560, max(260, text_width + 104), area.width()))
         self.adjustSize()
-        anchor = self.title_label.mapToGlobal(self.title_label.rect().bottomLeft())
-        x = max(area.left(), min(anchor.x() + (self.title_label.width() - self.width()) // 2,
+        anchor = self.title_label.mapToGlobal(tab_rect.bottomLeft())
+        x = max(area.left(), min(anchor.x(),
                                  area.right() - self.width() + 1))
         y = min(anchor.y() + 1, area.bottom() - self.height() + 1)
         self.move(x, max(area.top(), y))
@@ -1808,11 +1952,14 @@ class DocumentPathPopup(QFrame):
         self.show_timer.stop()
         self.hide_timer.stop()
         self.hide()
+        self.hovered_tab = None
 
     def hide_if_outside(self):
         cursor = QCursor.pos()
-        if (not self.rect().contains(self.mapFromGlobal(cursor))
-                and not self.title_label.rect().contains(self.title_label.mapFromGlobal(cursor))):
+        over_tab = (self.hovered_tab is not None
+                    and self.title_label.tabAt(self.title_label.mapFromGlobal(cursor))
+                    == self.hovered_tab)
+        if not self.rect().contains(self.mapFromGlobal(cursor)) and not over_tab:
             self.dismiss()
 
     def enterEvent(self, event):  # noqa: N802
@@ -1824,10 +1971,10 @@ class DocumentPathPopup(QFrame):
         super().leaveEvent(event)
 
     def eventFilter(self, watched, event):  # noqa: N802
-        if event.type() == QEvent.Type.Enter:
-            self.hide_timer.stop()
-            if not self.isVisible():
-                self.show_timer.start()
+        if event.type() in (QEvent.Type.Enter, QEvent.Type.MouseMove):
+            position = (event.position().toPoint() if event.type() == QEvent.Type.MouseMove
+                        else self.title_label.mapFromGlobal(QCursor.pos()))
+            self.hover_tab(position)
         elif event.type() == QEvent.Type.Leave:
             self.show_timer.stop()
             self.hide_timer.start()
@@ -1857,6 +2004,8 @@ class MainWindow(QMainWindow):
         self.paragraph_spacing = max(0, min(48, self.settings.value("paragraph_spacing", 14, type=int)))
         self.max_page_width = max(0, min(10000, self.settings.value("max_page_width", 950, type=int)))
         self.ribbon_auto_hide = self.settings.value("ribbon_auto_hide", False, type=bool)
+        self._tabs = []
+        self._active_tab = -1
         self.current_file: Path | None = None
         self.newline = "\n"
         self.has_bom = False
@@ -1965,6 +2114,15 @@ class MainWindow(QMainWindow):
         self.project_tree_path = Path(project_path)
         self.setup_project_tree()
         self.left_panels.addWidget(self.project_panel)
+        search_close = BoxIconButton("x")
+        search_close.setFixedSize(28, 28)
+        search_close.setAccessibleName("Close project search")
+        search_close.setToolTip("Close project search")
+        search_close.clicked.connect(self.close_left_panel)
+        self.project_search = ProjectSearchPanel(
+            self.project_tree_path, search_close, self.project_search_snapshots)
+        self.project_search.match_requested.connect(self.open_project_match)
+        self.left_panels.addWidget(self.project_search)
         self.reference_tools = ReferenceTools(self.settings, self)
         self.reference_panels = self.reference_tools.panels
         for name, panel in self.reference_panels.items():
@@ -2140,6 +2298,7 @@ class MainWindow(QMainWindow):
         self.editor.document().setModified(False)
         self.editor.document().clearUndoRedoStacks()
         self._saved_text = self.editor.toPlainText()
+        self.add_document_tab()
         if initial_file is not None:
             self.open_file(initial_file)
         else:
@@ -2260,6 +2419,7 @@ class MainWindow(QMainWindow):
             ("Reload Document", None, self.reload_document),
             ("Save", QKeySequence.StandardKey.Save, self.save_file),
             ("Save as…", QKeySequence.StandardKey.SaveAs, self.save_as),
+            ("Close Tab", QKeySequence.StandardKey.Close, self.close_tab),
         ]
         for label, shortcut, callback in actions:
             action = QAction(label, self)
@@ -2276,6 +2436,12 @@ class MainWindow(QMainWindow):
                 menu.addMenu(self.recent_menu)
                 self.recent_menu.aboutToShow.connect(self.update_recent_menu)
                 self.update_recent_menu()
+        for shortcut, step in (("Ctrl+Tab", 1), ("Ctrl+Shift+Tab", -1)):
+            action = QAction(self)
+            action.setShortcut(QKeySequence(shortcut))
+            action.triggered.connect(lambda checked=False, step=step:
+                                    self.activate_tab((self._active_tab + step) % len(self._tabs)))
+            self.addAction(action)
         menu.addSeparator()
         find_action = QAction("Find", self)
         find_action.setShortcut(QKeySequence.StandardKey.Find)
@@ -2395,10 +2561,18 @@ class MainWindow(QMainWindow):
         self.maximize_button.clicked.connect(self.toggle_maximize)
         self.close_button.clicked.connect(self.close)
         self.menuBar().setCornerWidget(controls, Qt.Corner.TopRightCorner)
-        self.title_label = QLabel("Untitled", self.menuBar())
-        self.title_label.setObjectName("title")
-        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.title_label.setToolTip("Untitled")
+        self.tab_bar = DocumentTabBar(self.menuBar())
+        self.tab_bar.setObjectName("documentTabs")
+        self.tab_bar.setAccessibleName("Open documents")
+        self.tab_bar.setExpanding(False)
+        self.tab_bar.setElideMode(Qt.TextElideMode.ElideMiddle)
+        self.tab_bar.setUsesScrollButtons(True)
+        self.tab_bar.setTabsClosable(True)
+        self.tab_bar.setDrawBase(False)
+        self.tab_bar.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.tab_bar.currentChanged.connect(self.activate_tab)
+        self.tab_bar.tabCloseRequested.connect(self.close_tab)
+        self.title_label = self.tab_bar
         self.document_path_popup = DocumentPathPopup(self, self.title_label)
         self.document_path_popup.set_path(self.current_file)
         self.menuBar().title_label = self.title_label
@@ -2424,6 +2598,16 @@ class MainWindow(QMainWindow):
         folder_button.clicked.connect(self.toggle_project_tree)
         layout.addWidget(folder_button)
         self.ribbon_buttons["Project tree"] = folder_button
+
+        search_button = BoxIconButton("search", self.ribbon)
+        search_button.setFixedSize(36, 36)
+        search_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        search_button.setAccessibleName("Search project")
+        search_button.setToolTip("Search project")
+        search_button.setCheckable(True)
+        search_button.clicked.connect(self.toggle_project_search)
+        layout.addWidget(search_button)
+        self.ribbon_buttons["Search project"] = search_button
 
         notepad_button = BoxIconButton("notepad", self.ribbon)
         notepad_button.setFixedSize(36, 36)
@@ -2512,6 +2696,7 @@ class MainWindow(QMainWindow):
         self.project_tree.setHeaderHidden(True)
         for column in range(1, self.project_model.columnCount()):
             self.project_tree.hideColumn(column)
+        self.project_tree.clicked.connect(self.open_project_item)
         self.project_tree.activated.connect(self.open_project_item)
         layout.addWidget(self.project_tree, 1)
         self.update_project_root()
@@ -2529,6 +2714,7 @@ class MainWindow(QMainWindow):
         self.project_tree_path = path
         self.settings.setValue("project_tree_path", str(path))
         self.update_project_root()
+        self.project_search.set_root(path)
         return True
 
     def toggle_project_tree(self):
@@ -2536,14 +2722,91 @@ class MainWindow(QMainWindow):
             self.close_left_panel()
         else:
             self.ribbon_buttons["Scatchpad"].setChecked(False)
+            self.ribbon_buttons["Search project"].setChecked(False)
             self.ribbon_buttons["Project tree"].setChecked(True)
             self.left_panels.setCurrentWidget(self.project_panel)
             self.left_panels.show()
             self.project_tree.setFocus()
 
+    def toggle_project_search(self):
+        if self.left_panels.isVisible() and self.left_panels.currentWidget() is self.project_search:
+            self.close_left_panel()
+            return
+        self.ribbon_buttons["Scatchpad"].setChecked(False)
+        self.ribbon_buttons["Project tree"].setChecked(False)
+        self.ribbon_buttons["Search project"].setChecked(True)
+        self.left_panels.setCurrentWidget(self.project_search)
+        self.left_panels.show()
+        self.project_search.input.setFocus()
+        self.project_search.input.selectAll()
+        self.project_search.schedule_search()
+
+    def project_search_snapshots(self):
+        sources = {}
+        for index, tab in enumerate(self._tabs):
+            path = tab.get('path')
+            if path is None:
+                continue
+            if index == self._active_tab:
+                sources[path] = self.document_source()
+            elif tab.get('editors'):
+                body, scratch = [entry[0].toPlainText() for entry in tab['editors']]
+                fields = tab['fields']
+                raw = fields['_scratch_raw']
+                if raw or scratch:
+                    if not raw or scratch != fields['_scratch_original']:
+                        raw = '---\nscratch:' + scratch + '\n---\n'
+                    anchor = fields['_scratch_anchor']
+                    position = anchor.position() if anchor else 0
+                    offset = len(body.encode('utf-16-le')[:position * 2].decode('utf-16-le'))
+                    prefix, suffix = body[:offset], body[offset:]
+                    if prefix and not prefix.endswith('\n'):
+                        prefix += '\n'
+                    if suffix and not raw.endswith('\n'):
+                        raw += '\n'
+                    body = prefix + raw + suffix
+                sources[path] = body
+        return sources
+
+    def open_project_match(self, match):
+        if not self.open_file(match.path):
+            return
+        source = self.document_source()
+        query = self.project_search.input.text()
+        # Re-locate the nearest occurrence if an open document changed since search.
+        occurrences = list(re.finditer(re.escape(query), source, re.IGNORECASE)) if query else []
+        if not occurrences:
+            self.project_search.schedule_search()
+            return
+        occurrence = min(occurrences, key=lambda m: abs(m.start() - match.start))
+        start, end = occurrence.span()
+        body, scratch, raw, offset = (split_scratchpad(source)
+                                      if match.path.suffix.lower() != '.txt'
+                                      else (source, '', '', 0))
+        target = self.editor
+        text = body
+        if raw and offset <= start < offset + len(raw):
+            scratch_start = offset + re.search(r'^scratch:[ \t]?', raw, re.MULTILINE).end()
+            if start < scratch_start or end > scratch_start + len(scratch):
+                return
+            start, end = start - scratch_start, end - scratch_start
+            target, text = self.scratchpad_editor, scratch
+            self.ribbon_buttons["Scatchpad"].setChecked(True)
+        elif raw and start >= offset + len(raw):
+            start, end = start - len(raw), end - len(raw)
+        cursor = QTextCursor(target.document())
+        cursor.setPosition(len(text[:start].encode('utf-16-le')) // 2)
+        cursor.setPosition(len(text[:end].encode('utf-16-le')) // 2,
+                           QTextCursor.MoveMode.KeepAnchor)
+        target.setTextCursor(cursor)
+        target.ensureCursorVisible()
+        target.setFocus()
+
     def open_project_item(self, index):
         if index.isValid() and not self.project_model.isDir(index):
-            self.open_file(Path(self.project_model.filePath(index)), focus_editor=False)
+            new_tab = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier)
+            self.open_file(Path(self.project_model.filePath(index)), focus_editor=False,
+                           replace_current=not new_tab)
 
     def set_ribbon_auto_hide(self, enabled):
         self.ribbon_auto_hide = enabled
@@ -3147,7 +3410,8 @@ class MainWindow(QMainWindow):
                 return True
         if (event.type() == QEvent.Type.MouseButtonDblClick
                 and event.button() == Qt.MouseButton.LeftButton
-                and watched is self.title_label):
+                and watched is self.title_label
+                and self.tab_bar.tabAt(event.position().toPoint()) < 0):
             self.toggle_maximize()
             return True
         if (event.type() == QEvent.Type.MouseButtonPress
@@ -3175,7 +3439,8 @@ class MainWindow(QMainWindow):
                     edge |= Qt.Edge.BottomEdge
                 if edge and self.windowHandle() and self.windowHandle().startSystemResize(edge):
                     return True
-            if watched is self.title_label:
+            if (watched is self.title_label
+                    and self.tab_bar.tabAt(event.position().toPoint()) < 0):
                 if self.windowHandle() and self.windowHandle().startSystemMove():
                     return True
         return super().eventFilter(watched, event)
@@ -3210,7 +3475,6 @@ class MainWindow(QMainWindow):
             path = Path(filename)
             if path.is_file():
                 self.open_file(path)
-                break
 
     def choose_file(self):
         start = self.current_file.parent if self.current_file else Path.home()
@@ -3227,11 +3491,12 @@ class MainWindow(QMainWindow):
     def reload_document(self) -> bool:
         if self.current_file is None:
             return False
-        return self.open_file(self.current_file)
+        return self.open_file(self.current_file, reload=True)
 
     def toggle_scratchpad(self, visible):
         if visible:
             self.ribbon_buttons["Project tree"].setChecked(False)
+            self.ribbon_buttons["Search project"].setChecked(False)
             self.left_panels.setCurrentWidget(self.scratchpad_panel)
             self.left_panels.show()
             self.scratchpad_editor.setFocus()
@@ -3281,6 +3546,7 @@ class MainWindow(QMainWindow):
         button = self.ribbon_buttons["Scatchpad"]
         button.setChecked(False)
         self.ribbon_buttons["Project tree"].setChecked(False)
+        self.ribbon_buttons["Search project"].setChecked(False)
         panel = self.reference_panels[name]
         self.left_panels.setCurrentWidget(panel)
         self.left_panels.show()
@@ -3292,6 +3558,7 @@ class MainWindow(QMainWindow):
     def close_left_panel(self):
         self.ribbon_buttons["Scatchpad"].setChecked(False)
         self.ribbon_buttons["Project tree"].setChecked(False)
+        self.ribbon_buttons["Search project"].setChecked(False)
         self.left_panels.hide()
         self.editor.setFocus()
 
@@ -3309,7 +3576,8 @@ class MainWindow(QMainWindow):
         self._scratch_anchor = None
         self._scratch_raw = raw
         self._scratch_original = scratch
-        if scratch or self.scratchpad_editor.document().characterCount() > 1:
+        if (scratch or self.scratchpad_editor.document().characterCount() > 1
+                or self.scratchpad_editor.document().property("tabRetained")):
             self.scratchpad_editor.setPlainText(scratch)
         self.scratchpad_editor.document().setModified(False)
         self.scratchpad_editor.document().clearUndoRedoStacks()
@@ -3337,8 +3605,117 @@ class MainWindow(QMainWindow):
             raw += '\n'
         return prefix + raw + suffix
 
-    def open_file(self, path: Path, *, focus_editor=True):
+    _tab_fields = ('current_file', 'newline', 'has_bom', '_scratch_raw',
+                   '_scratch_original', '_scratch_anchor', '_saved_source',
+                   '_saved_components_valid', '_saved_anchor')
+
+    def add_document_tab(self):
+        self._tabs.append({})
+        self._active_tab = len(self._tabs) - 1
+        self.tab_bar.blockSignals(True)
+        self.tab_bar.addTab("Untitled")
+        self.tab_bar.setCurrentIndex(self._active_tab)
+        self.tab_bar.blockSignals(False)
+
+    def stash_tab(self):
+        if self._active_tab < 0:
+            return
+        tab = self._tabs[self._active_tab]
+        tab['path'] = self.current_file
+        tab['fields'] = {name: getattr(self, name, None) for name in self._tab_fields}
+        tab['editors'] = []
+        for editor in (self.editor, self.scratchpad_editor):
+            document = editor.document()
+            document.setProperty("tabRetained", True)
+            tab['editors'].append((document, editor.source_stats, QTextCursor(editor.textCursor()),
+                                   editor.verticalScrollBar().value(), editor.horizontalScrollBar().value()))
+
+    def activate_tab(self, index, *, focus_editor=True):
+        if index < 0 or index >= len(self._tabs) or index == self._active_tab:
+            return
+        self.stash_tab()
+        tab = self._tabs[index]
+        self.document_path_popup.dismiss()
+        self.setUpdatesEnabled(False)
+        self.loading = True
+        try:
+            self._load_details_timer.stop()
+            self._load_details_pending = False
+            self._active_tab = index
+            for name, value in tab['fields'].items():
+                setattr(self, name, value)
+            self.highlighter.enabled = self.current_file is None or self.current_file.suffix.lower() != '.txt'
+            for editor, state in zip((self.editor, self.scratchpad_editor), tab['editors']):
+                document, stats, cursor, vertical, horizontal = state
+                editor.restore_tab_document(document, stats)
+                editor.setTextCursor(cursor)
+                editor.update_code_panels()
+                editor.verticalScrollBar().setValue(vertical)
+                editor.horizontalScrollBar().setValue(horizontal)
+            self.tab_bar.blockSignals(True)
+            self.tab_bar.setCurrentIndex(index)
+            self.tab_bar.blockSignals(False)
+        finally:
+            self.loading = False
+            self.setUpdatesEnabled(True)
+        self.update_title()
+        self.update_status()
+        if self.search_controls():
+            self.update_find_matches()
+        self.editor.spelling.refresh()
+        if self.current_file:
+            self.remember_recent_file(self.current_file)
+        if focus_editor:
+            self.editor.setFocus()
+        else:
+            self.editor.dismiss_cursor()
+
+    def close_tab(self, index=None, *, focus_editor=True):
+        # QAction.triggered supplies a bool, while QTabBar supplies an index.
+        if index is None or isinstance(index, bool):
+            index = self._active_tab
+        self.activate_tab(index, focus_editor=focus_editor)
         if not self.confirm_discard():
+            return False
+        self.stash_tab()
+        removed = self._tabs[index]
+        if len(self._tabs) == 1:
+            self.new_file()
+        else:
+            self.activate_tab(index - 1 if index else 1, focus_editor=focus_editor)
+        self._tabs.pop(index)
+        self._active_tab -= int(self._active_tab > index)
+        self.tab_bar.blockSignals(True)
+        self.tab_bar.removeTab(index)
+        self.tab_bar.setCurrentIndex(self._active_tab)
+        self.tab_bar.blockSignals(False)
+        for document, *_ in removed['editors']:
+            document.deleteLater()
+        self.update_title()
+        return True
+
+    def confirm_close_tabs(self):
+        original = self._active_tab
+        for index in [original] + [i for i in range(len(self._tabs)) if i != original]:
+            self.activate_tab(index)
+            if not self.confirm_discard():
+                return False
+        self.activate_tab(original)
+        return True
+
+    def open_file(self, path: Path, *, focus_editor=True, reload=False, replace_current=False):
+        path = path.resolve()
+        if not reload:
+            for index, tab in enumerate(self._tabs):
+                if tab.get('path') == path:
+                    if replace_current and index != self._active_tab:
+                        if not self.close_tab(focus_editor=focus_editor):
+                            return False
+                        index = next(i for i, tab in enumerate(self._tabs)
+                                     if tab.get('path') == path)
+                    self.activate_tab(index, focus_editor=focus_editor)
+                    return True
+        elif not self.confirm_discard():
             return False
         try:
             raw = path.read_bytes()
@@ -3346,6 +3723,19 @@ class MainWindow(QMainWindow):
         except (OSError, UnicodeError) as exc:
             QMessageBox.critical(self, "Could not open file", f"{path}\n\n{exc}")
             return False
+        if not reload:
+            if replace_current:
+                if not self.confirm_discard():
+                    return False
+            elif self.current_file is not None or self.has_unsaved_changes():
+                self.stash_tab()
+                self.add_document_tab()
+        if reload or replace_current or self._tabs[self._active_tab].get("editors"):
+            # Reloading or replacing a tab releases its old documents.
+            for editor in (self.editor, self.scratchpad_editor):
+                editor.document().setProperty("tabRetained", False)
+            self._tabs[self._active_tab].pop("editors", None)
+            self._tabs[self._active_tab].pop("fields", None)
         # Keep the previous frame visible until text, navigation, and layout
         # are ready together. Sidebar changes can otherwise repaint/reflow the
         # editor while the new document is still being prepared.
@@ -3365,6 +3755,7 @@ class MainWindow(QMainWindow):
             finally:
                 self.loading = False
             self.current_file = path.resolve()
+            self._tabs[self._active_tab]["path"] = self.current_file
             self.mark_loaded_source_saved()
             self.editor.moveCursor(self.editor.textCursor().MoveOperation.Start)
             self.update_headings(reset=True)
@@ -3409,8 +3800,8 @@ class MainWindow(QMainWindow):
             self.update_find_matches()
 
     def new_file(self):
-        if not self.confirm_discard():
-            return
+        self.stash_tab()
+        self.add_document_tab()
         self.loading = True
         self.load_document_source('')
         self.loading = False
@@ -3675,8 +4066,11 @@ class MainWindow(QMainWindow):
         name = self.current_file.name if self.current_file else "Untitled"
         dirty = self.has_unsaved_changes()
         title = name + ("*" if dirty else "")
-        self.title_label.setToolTip(title)
-        self.document_path_popup.set_path(self.current_file)
+        if self._active_tab >= 0:
+            self._tabs[self._active_tab]['path'] = self.current_file
+            self.tab_bar.setTabText(self._active_tab, title.replace('&', '&&'))
+            self.tab_bar.setTabToolTip(self._active_tab, str(self.current_file) if self.current_file else "Not saved yet")
+        self.document_path_popup.refresh_path()
         self.menuBar().position_title()
         self.setWindowTitle(("*" if dirty else "") + name + " — " + APP_NAME)
 
@@ -3686,8 +4080,9 @@ class MainWindow(QMainWindow):
         self.count_label.setText(f"{count} word{'s' if count != 1 else ''}")
 
     def closeEvent(self, event):  # noqa: N802
-        if getattr(self, "_updating", False) or self.confirm_discard():
+        if getattr(self, "_updating", False) or self.confirm_close_tabs():
             self.reference_tools.cancel()
+            self.project_search.cancel()
             self.settings.setValue("window_geometry", self.saveGeometry())
             self.settings.setValue("window_normal_geometry", self.normalGeometry())
             self.settings.setValue("window_maximized", self.isMaximized())
