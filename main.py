@@ -2543,7 +2543,7 @@ class MainWindow(QMainWindow):
 
     def open_project_item(self, index):
         if index.isValid() and not self.project_model.isDir(index):
-            self.open_file(Path(self.project_model.filePath(index)))
+            self.open_file(Path(self.project_model.filePath(index)), focus_editor=False)
 
     def set_ribbon_auto_hide(self, enabled):
         self.ribbon_auto_hide = enabled
@@ -3337,7 +3337,7 @@ class MainWindow(QMainWindow):
             raw += '\n'
         return prefix + raw + suffix
 
-    def open_file(self, path: Path):
+    def open_file(self, path: Path, *, focus_editor=True):
         if not self.confirm_discard():
             return False
         try:
@@ -3346,32 +3346,48 @@ class MainWindow(QMainWindow):
         except (OSError, UnicodeError) as exc:
             QMessageBox.critical(self, "Could not open file", f"{path}\n\n{exc}")
             return False
-        self.has_bom = raw.startswith(codecs.BOM_UTF8)
-        self.newline = "\r\n" if "\r\n" in content else ("\r" if "\r" in content else "\n")
-        content = content.replace("\r\n", "\n").replace("\r", "\n")
-        self.loading = True
-        self.load_document_source(content, markdown=path.suffix.lower() != '.txt',
-                                  defer_presentation=True)
-        self.loading = False
-        self.current_file = path.resolve()
-        self.editor.update_code_panels(full=False)
-        self.editor.document().setModified(False)
-        self.editor.document().clearUndoRedoStacks()
-        self.mark_loaded_source_saved()
-        self.editor.moveCursor(self.editor.textCursor().MoveOperation.Start)
-        self._load_details_pending = self.editor.document().blockCount() > 300
-        if self._load_details_pending:
-            # Release rows belonging to the previous document immediately.
-            self.heading_list.clear()
-            self.headings = []
-        else:
+        # Keep the previous frame visible until text, navigation, and layout
+        # are ready together. Sidebar changes can otherwise repaint/reflow the
+        # editor while the new document is still being prepared.
+        updates_enabled = self.updatesEnabled()
+        self.setUpdatesEnabled(False)
+        try:
+            self.has_bom = raw.startswith(codecs.BOM_UTF8)
+            self.newline = "\r\n" if "\r\n" in content else ("\r" if "\r" in content else "\n")
+            content = content.replace("\r\n", "\n").replace("\r", "\n")
+            # Tree navigation previews the note without activating its first
+            # source line. Clicking the document restores the editing cursor.
+            if not focus_editor:
+                self.editor.dismiss_cursor()
+            self.loading = True
+            try:
+                self.load_document_source(content, markdown=path.suffix.lower() != '.txt')
+            finally:
+                self.loading = False
+            self.current_file = path.resolve()
+            self.mark_loaded_source_saved()
+            self.editor.moveCursor(self.editor.textCursor().MoveOperation.Start)
             self.update_headings(reset=True)
+            self.update_title()
+            self.update_status()
+            if focus_editor:
+                self.editor.setFocus()
+            self.remember_recent_file(self.current_file)
+            # Apply final sidebar/page widths before measuring panels and prose.
+            self.centralWidget().layout().activate()
+            # Settle queued splitter/scrollbar geometry without processing
+            # input, timers, or paint events during the switch.
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
+            self.editor.update_page_margins()
+            self.editor.document().documentLayout().documentSize()
+            self.editor.update_code_panels(full=False)
             if self.search_controls():
                 self.update_find_matches()
-        self.update_title()
-        self.update_status()
-        self.editor.setFocus()
-        self.remember_recent_file(self.current_file)
+            self.editor.update_scroll_range()
+            self.editor.document().setModified(False)
+            self.editor.document().clearUndoRedoStacks()
+        finally:
+            self.setUpdatesEnabled(updates_enabled)
         return True
 
     def mark_loaded_source_saved(self):
