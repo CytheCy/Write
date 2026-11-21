@@ -31,6 +31,7 @@ from PySide6.QtGui import (
     QPalette,
     QPainter,
     QPainterPath,
+    QPixmap,
     QTextBlockFormat,
     QTextBlockUserData,
     QTextCharFormat,
@@ -2336,6 +2337,8 @@ class MainWindow(QMainWindow):
         self.loading = True
         try:
             apply_application_theme(app, self.theme)
+            if hasattr(self, "file_menu"):
+                self.update_file_menu_icon()
             # Qt can reset the editor's widget font when the application stylesheet changes.
             font = self.editor.font()
             font.setPointSize(self.font_size)
@@ -2409,8 +2412,21 @@ class MainWindow(QMainWindow):
         dialog.exec()
         dialog.deleteLater()
 
+    def update_file_menu_icon(self):
+        ratio = self.devicePixelRatioF()
+        pixmap = QPixmap(round(18 * ratio), round(18 * ratio))
+        pixmap.setDevicePixelRatio(ratio)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        boxicon("menu", self.theme['text']).render(painter, QRectF(0, 0, 18, 18))
+        painter.end()
+        self.file_menu.setIcon(QIcon(pixmap))
+
     def setup_actions(self):
         self.file_menu = QMenu("File", self.menuBar())
+        self.file_menu.setAccessibleName("Menu")
+        self.file_menu.menuAction().setToolTip("Menu")
+        self.update_file_menu_icon()
         self.menuBar().addMenu(self.file_menu)
         menu = self.file_menu
         actions = [
@@ -2590,7 +2606,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(6)
         self.ribbon_buttons = {}
 
-        folder_button = BoxIconButton("folder-open", self.ribbon)
+        folder_button = BoxIconButton("folder-tree", self.ribbon)
         folder_button.setFixedSize(36, 36)
         folder_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         folder_button.setAccessibleName("Project Tree")
@@ -2620,7 +2636,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(notepad_button)
         self.ribbon_buttons["Scatchpad"] = notepad_button
 
-        for name, icon in (("Dictionary", "sort-a-z"),
+        for name, icon in (("Dictionary", "book-mw"),
                            ("Thesaurus", "thesaurus"),
                            ("Moby Thesaurus", "whale")):
             button = BoxIconButton(icon, self.ribbon)
