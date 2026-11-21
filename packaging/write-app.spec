@@ -12,6 +12,9 @@ BuildRequires:  python3-pyside6 >= 6.6
 BuildRequires:  python3-pyspellchecker >= 0.8.4
 BuildRequires:  desktop-file-utils
 Requires:       python3
+Requires:       python3.12
+Requires:       espeak-ng
+Requires:       libsndfile
 Requires:       python3-rpm
 Requires:       dnf5
 Requires:       polkit
@@ -32,6 +35,8 @@ offline English spell checking, a heading panel, and configurable themes.
 %install
 install -d %{buildroot}%{_datadir}/%{name} %{buildroot}%{_bindir}
 install -m 644 main.py project_search.py settings_ui.py themes.py spelling.py references.py reference_api.py reference_widgets.py updater.py update_helper.py VERSION write.svg WRITE-RPM-KEY.asc %{buildroot}%{_datadir}/%{name}/
+install -d %{buildroot}%{_datadir}/%{name}/kokoro_tts
+install -m 644 kokoro_tts/*.py kokoro_tts/runtime-requirements.txt %{buildroot}%{_datadir}/%{name}/kokoro_tts/
 install -d %{buildroot}%{_datadir}/%{name}/boxicons
 install -m 644 boxicons/*.svg boxicons/LICENSE %{buildroot}%{_datadir}/%{name}/boxicons/
 cat > %{buildroot}%{_bindir}/write-app <<'EOF'

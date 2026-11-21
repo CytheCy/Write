@@ -266,3 +266,31 @@ git push --atomic origin main v1.0.7
 
 The project has not declared a license; RPM metadata records this as
 `LicenseRef-Not-Specified` without granting additional rights.
+
+## Kokoro TTS
+
+Click the speaker icon (**Kokoro TTS**) in the left ribbon. Choose an American
+or British voice and click **Start** to read from the cursor in the active
+document through its end. Playback begins with the first generated chunk while
+the rest generates in the background. **Stop** cancels generation and playback;
+closing the footer also stops speech. The voice choice is remembered.
+
+Write includes its own speech worker and manages a private Kokoro environment
+in its application data directory. It does not launch or require Kokoro Reader
+or another speech application. The first Start installs CPU PyTorch and Kokoro
+0.9.4 and downloads the model and voice; allow several minutes and internet
+access for this setup. Later runs use the installed dependencies and cached
+models. Text synthesis runs locally. For source installations on Fedora, install
+`python3.12 espeak-ng libsndfile` with DNF first; the RPM declares
+these dependencies. Write itself can continue using the system Python.
+
+The selected Project Tree folder receives a **Kodoro** folder containing
+`request.json`, numbered `chunk-*.txt` and `chunk-*.wav` files, and `final.wav`
+after successful generation. Formatting is cleaned for speech. The opening
+chunk is about 120 characters; later chunks are about 300, preferring sentence
+boundaries, with short pauses between chunks. Start snapshots the current text
+and voice; editing or switching tabs does not change an ongoing recording.
+Starting again removes the previous generated chunks and recording from Kodoro.
+Other files in that folder are preserved. Copy `final.wav` elsewhere to keep it
+before starting a new recording. Cancelled runs can leave chunks and a partial
+recording, which are cleared on the next Start.

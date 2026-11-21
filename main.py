@@ -82,6 +82,7 @@ from references import ReferenceTools
 from updater import UpdatesDialog
 from project_search import ProjectSearchPanel
 from settings_ui import SettingsDialog
+from kokoro_tts.footer import KokoroFooter
 
 
 APP_NAME = "Write"
@@ -2041,7 +2042,12 @@ class MainWindow(QMainWindow):
         self.content_splitter.setHandleWidth(6)
         self.content_splitter.setChildrenCollapsible(False)
         self.editor.setMinimumWidth(280)
-        self.content_splitter.addWidget(self.editor)
+        self.document_area = QWidget()
+        document_layout = QVBoxLayout(self.document_area)
+        document_layout.setContentsMargins(0, 0, 0, 0)
+        document_layout.setSpacing(0)
+        document_layout.addWidget(self.editor, 1)
+        self.content_splitter.addWidget(self.document_area)
         self.heading_panel = QWidget()
         self.heading_panel.setObjectName("headingPanel")
         self.heading_panel.setMinimumWidth(1)
@@ -2274,6 +2280,9 @@ class MainWindow(QMainWindow):
         self.replace_footer.hide()
         self.find_matches = []
         self.find_index = -1
+
+        self.kokoro_footer = KokoroFooter(self)
+        document_layout.addWidget(self.kokoro_footer)
 
         status = QWidget()
         status.setObjectName("status")
@@ -2595,6 +2604,12 @@ class MainWindow(QMainWindow):
         self.menuBar().title_label = self.title_label
         self.menuBar().position_title()
 
+    def toggle_kokoro(self, checked):
+        if checked:
+            self.kokoro_footer.show()
+        else:
+            self.kokoro_footer.close_tool()
+
     def setup_ribbon(self):
         self.ribbon = QWidget()
         self.ribbon.setObjectName("toolbarRibbon")
@@ -2648,6 +2663,16 @@ class MainWindow(QMainWindow):
                 lambda checked=False, selected=name: self.toggle_reference_panel(selected))
             layout.addWidget(button)
             self.ribbon_buttons[name] = button
+        tts_button = BoxIconButton("volume-full", self.ribbon)
+        tts_button.setFixedSize(36, 36)
+        tts_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        tts_button.setAccessibleName("Kokoro TTS")
+        tts_button.setToolTip("Kokoro TTS")
+        tts_button.setCheckable(True)
+        tts_button.clicked.connect(self.toggle_kokoro)
+        self.kokoro_footer.closed.connect(lambda: tts_button.setChecked(False))
+        layout.addWidget(tts_button)
+        self.ribbon_buttons["Kokoro TTS"] = tts_button
         layout.addStretch(1)
         tools_button = BoxIconButton("toolbox", self.ribbon)
         tools_button.setFixedSize(36, 36)
@@ -4108,6 +4133,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):  # noqa: N802
         if getattr(self, "_updating", False) or self.confirm_close_tabs():
+            self.kokoro_footer.shutdown()
             self.reference_tools.cancel()
             self.project_search.cancel()
             self.settings.setValue("window_geometry", self.saveGeometry())
