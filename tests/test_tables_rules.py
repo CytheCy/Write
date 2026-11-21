@@ -2,6 +2,7 @@
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import unittest
+from unittest.mock import patch
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextCharFormat, QTextCursor
@@ -216,6 +217,41 @@ class TablesAndRulesTests(unittest.TestCase):
                          '| Name | Price |\n|:---|---:|\n| One | $1 |\n|  |  |')
         self.assertEqual(self.editor.textCursor().blockNumber(), 3)
         self.assertEqual(self.editor.document().findBlockByNumber(3).userState(), 4)
+
+    def test_repaints_reuse_layout_and_resize_edit_theme_refresh_it(self):
+        e = self.editor
+        e.setPlainText('| Name | Price |\n|:---|---:|\n| One | $1 |\nAfter')
+        e.moveCursor(QTextCursor.MoveOperation.End)
+        self.app.processEvents()
+        layout = next(iter(e._table_layouts.values()))
+        widths = layout.widths.copy()
+        natural = layout.natural.copy()
+        docs = [doc for _, cells in layout.rows for doc in cells]
+        # Repainting must not reformat or resize the cached cell documents.
+        from contextlib import ExitStack
+        with ExitStack() as stack:
+            for doc in docs:
+                stack.enter_context(patch.object(doc, 'setTextWidth', side_effect=AssertionError('relayout')))
+            for _ in range(3):
+                self.assertFalse(e.viewport().grab().isNull())
+        e.resize(500, 500)
+        self.app.processEvents()
+        self.assertNotEqual(layout.widths, widths)
+        self.assertEqual(layout.natural, natural)
+        cursor = QTextCursor(e.document().findBlockByNumber(2))
+        cursor.setPosition(cursor.position() + 2)
+        cursor.insertText('A much longer item name ')
+        self.app.processEvents()
+        changed = next(iter(e._table_layouts.values()))
+        self.assertIsNot(changed, layout)
+        self.assertGreater(changed.natural[0], natural[0])
+        self.highlighter.update_colors(THEMES['tokyo-night'])
+        e.update_code_panels()
+        self.app.processEvents()
+        themed = next(iter(e._table_layouts.values()))
+        self.assertIsNot(themed, changed)
+        for _, cells in themed.rows:
+            self.assertTrue(all(doc not in docs for doc in cells))
 
 
 if __name__ == '__main__':

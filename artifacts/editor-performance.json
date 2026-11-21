@@ -1,0 +1,996 @@
+{
+  "date": "2026-11-20",
+  "baseline_commit": "f80a71f4c7c93c0e812d44c9c84fd352a390ef35",
+  "environment": {
+    "platform": "Linux-7.3.4-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "python": "3.14.10",
+    "pyside6": "6.10.2",
+    "qt_platform": "offscreen"
+  },
+  "method": "Same script and machine with no competing test processes. Six sequential process runs in before/after, after/before, before/after order. Each process reports median milliseconds per operation from five batches after warmup; report takes median across three process runs per version. Spelling disabled; Find closed.",
+  "before_ms": {
+    "prose_500_status_ms": 0.2636,
+    "prose_500_clean_query_ms": 0.0499,
+    "prose_500_dirty_query_ms": 0.0496,
+    "prose_500_typing_ms": 1.695,
+    "prose_5000_status_ms": 4.0524,
+    "prose_5000_clean_query_ms": 0.6688,
+    "prose_5000_dirty_query_ms": 0.5008,
+    "prose_5000_typing_ms": 6.5733,
+    "table_repaint_ms": 14.4498,
+    "table_rebuild_and_paint_ms": 138.396
+  },
+  "after_ms": {
+    "prose_500_status_ms": 0.0019,
+    "prose_500_clean_query_ms": 0.0007,
+    "prose_500_dirty_query_ms": 0.0002,
+    "prose_500_typing_ms": 1.301,
+    "prose_5000_status_ms": 0.0016,
+    "prose_5000_clean_query_ms": 0.0007,
+    "prose_5000_dirty_query_ms": 0.0002,
+    "prose_5000_typing_ms": 1.244,
+    "table_repaint_ms": 9.1467,
+    "table_rebuild_and_paint_ms": 140.8305
+  },
+  "speedup": {
+    "prose_500_status_ms": 138.74,
+    "prose_500_clean_query_ms": 71.29,
+    "prose_500_dirty_query_ms": 248.0,
+    "prose_500_typing_ms": 1.3,
+    "prose_5000_status_ms": 2532.75,
+    "prose_5000_clean_query_ms": 955.43,
+    "prose_5000_dirty_query_ms": 2504.0,
+    "prose_5000_typing_ms": 5.28,
+    "table_repaint_ms": 1.58,
+    "table_rebuild_and_paint_ms": 0.98
+  },
+  "tests": {
+    "before": {
+      "total": 178,
+      "failed_modules": 0,
+      "modules": [
+        {
+          "module": "test_bullets.py",
+          "exit_code": 0,
+          "tests": 4,
+          "seconds": 0.49
+        },
+        {
+          "module": "test_cleanup_actions.py",
+          "exit_code": 0,
+          "tests": 2,
+          "seconds": 1.71
+        },
+        {
+          "module": "test_code_markers.py",
+          "exit_code": 0,
+          "tests": 3,
+          "seconds": 0.58
+        },
+        {
+          "module": "test_code_panel.py",
+          "exit_code": 0,
+          "tests": 2,
+          "seconds": 0.49
+        },
+        {
+          "module": "test_document_layout.py",
+          "exit_code": 0,
+          "tests": 9,
+          "seconds": 14.98
+        },
+        {
+          "module": "test_emphasis.py",
+          "exit_code": 0,
+          "tests": 2,
+          "seconds": 0.54
+        },
+        {
+          "module": "test_file_dialog.py",
+          "exit_code": 0,
+          "tests": 6,
+          "seconds": 12.11
+        },
+        {
+          "module": "test_file_switching.py",
+          "exit_code": 0,
+          "tests": 11,
+          "seconds": 37.84
+        },
+        {
+          "module": "test_find.py",
+          "exit_code": 0,
+          "tests": 10,
+          "seconds": 34.52
+        },
+        {
+          "module": "test_heading_panel.py",
+          "exit_code": 0,
+          "tests": 17,
+          "seconds": 68.12
+        },
+        {
+          "module": "test_headings.py",
+          "exit_code": 0,
+          "tests": 5,
+          "seconds": 0.45
+        },
+        {
+          "module": "test_last_file.py",
+          "exit_code": 0,
+          "tests": 3,
+          "seconds": 19.84
+        },
+        {
+          "module": "test_links.py",
+          "exit_code": 0,
+          "tests": 4,
+          "seconds": 0.58
+        },
+        {
+          "module": "test_numbered_lists.py",
+          "exit_code": 0,
+          "tests": 2,
+          "seconds": 0.42
+        },
+        {
+          "module": "test_panel_updates.py",
+          "exit_code": 0,
+          "tests": 4,
+          "seconds": 1.25
+        },
+        {
+          "module": "test_references.py",
+          "exit_code": 0,
+          "tests": 8,
+          "seconds": 0.43
+        },
+        {
+          "module": "test_ribbon.py",
+          "exit_code": 0,
+          "tests": 20,
+          "seconds": 41.92,
+          "isolated_methods": [
+            {
+              "module": "test_ribbon.py",
+              "method": "test_ribbon_is_left_and_shows_scratchpad_and_references",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 0.84
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_settings_icon_opens_tabbed_window",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.7
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_project_tree_toggles_and_switches_left_panels",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.02
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_general_project_location_updates_tree_and_survives_restart",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 3.26
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_project_file_activation_respects_unsaved_changes",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.48
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_settings_controls_apply_and_persist",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 2.92
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_settings_close_waits_for_update_worker",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 2.03
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_reference_icons_toggle_and_switch_left_panels",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.69
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_hovering_reference_icons_does_not_open_popup_or_panel",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.66
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_reference_icons_search_selection_only_when_opening",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.87
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_reference_close_button_allows_reopening_from_icon",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.74
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_open_reference_without_selection_keeps_existing_search",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.92
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_open_reference_ignores_whitespace_selection",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.69
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_ctrl_l_searches_hovered_word_and_preserves_selection",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.75
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_ctrl_l_ignores_whitespace_punctuation_and_outside_document",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 2.04
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_ctrl_l_resolves_word_after_scrolling",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.63
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_switching_reference_and_scratchpad_preserves_notes",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.81
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_auto_hide_reveal_leave_and_pin",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 6.71
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_slide_and_return_during_close",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.6
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_preference_survives_reopening_and_heading_setting",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 2.56
+            }
+          ]
+        },
+        {
+          "module": "test_scratchpad.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 6,
+          "seconds": 10.47
+        },
+        {
+          "module": "test_shutdown.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 1,
+          "seconds": 2.55
+        },
+        {
+          "module": "test_spelling.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 5,
+          "seconds": 18.72
+        },
+        {
+          "module": "test_spelling_batches.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 8,
+          "seconds": 2.4
+        },
+        {
+          "module": "test_tables_rules.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 10,
+          "seconds": 0.56
+        },
+        {
+          "module": "test_themes.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 10,
+          "seconds": 120.09,
+          "initial_exit_code": 124,
+          "isolated_verification": [
+            {
+              "method": "test_registration_tokens_and_contrast",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_semantic_token_defaults_and_overrides",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_bracketed_text_uses_its_token",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_switch_preserves_document_and_typography",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_selection_persists_and_restores",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_switch_keeps_selected_font_size",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_persistence_in_a_new_process",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_switch_preserves_clean_file_and_serialization",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_invalid_saved_id_falls_back_and_system_is_available",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_source_highlighting_and_plain_text_mode",
+              "exit_code": 0,
+              "tests": 1
+            }
+          ]
+        },
+        {
+          "module": "test_title_path.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 4,
+          "seconds": 3.44
+        },
+        {
+          "module": "test_update_helper.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 1,
+          "seconds": 0.34
+        },
+        {
+          "module": "test_update_scheduling.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 5,
+          "seconds": 15.15
+        },
+        {
+          "module": "test_updater.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 7,
+          "seconds": 0.29
+        },
+        {
+          "module": "test_window_geometry.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 9,
+          "seconds": 84.14,
+          "initial_exit_code": -15,
+          "isolated_verification": [
+            {
+              "method": "test_platform_selection_preserves_explicit_choices_and_wayland_only_sessions",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_restores_normal_size_and_position",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_restores_window_aligned_to_right_screen_edge",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_restores_maximized_state_and_previous_normal_geometry",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_cancelled_close_does_not_replace_saved_geometry",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_close_button_works_with_each_menu_open",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_close_from_menu_can_be_cancelled_for_unsaved_changes",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_close_hover_matches_normal_appearance_with_menus_open",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_minimized_window_reopens_visible",
+              "exit_code": 0,
+              "tests": 1
+            }
+          ]
+        }
+      ]
+    },
+    "after": {
+      "total": 182,
+      "failed_modules": 0,
+      "modules": [
+        {
+          "module": "test_bullets.py",
+          "exit_code": 0,
+          "tests": 4,
+          "seconds": 0.43
+        },
+        {
+          "module": "test_cleanup_actions.py",
+          "exit_code": 0,
+          "tests": 2,
+          "seconds": 1.81
+        },
+        {
+          "module": "test_code_markers.py",
+          "exit_code": 0,
+          "tests": 3,
+          "seconds": 0.53
+        },
+        {
+          "module": "test_code_panel.py",
+          "exit_code": 0,
+          "tests": 2,
+          "seconds": 0.45
+        },
+        {
+          "module": "test_document_layout.py",
+          "exit_code": 0,
+          "tests": 9,
+          "seconds": 15.3
+        },
+        {
+          "module": "test_emphasis.py",
+          "exit_code": 0,
+          "tests": 2,
+          "seconds": 0.54
+        },
+        {
+          "module": "test_file_dialog.py",
+          "exit_code": 0,
+          "tests": 6,
+          "seconds": 12.16
+        },
+        {
+          "module": "test_file_switching.py",
+          "exit_code": 0,
+          "tests": 11,
+          "seconds": 37.88
+        },
+        {
+          "module": "test_find.py",
+          "exit_code": 0,
+          "tests": 10,
+          "seconds": 34.56
+        },
+        {
+          "module": "test_heading_panel.py",
+          "exit_code": 0,
+          "tests": 17,
+          "seconds": 68.13,
+          "initial_exit_code": 1,
+          "verification": "Entire module rerun: 17 passed. Initial narrow-panel settings test returned width 0 instead of 400; isolated test and full module rerun passed."
+        },
+        {
+          "module": "test_headings.py",
+          "exit_code": 0,
+          "tests": 5,
+          "seconds": 0.58
+        },
+        {
+          "module": "test_last_file.py",
+          "exit_code": 0,
+          "tests": 3,
+          "seconds": 19.57
+        },
+        {
+          "module": "test_links.py",
+          "exit_code": 0,
+          "tests": 4,
+          "seconds": 0.62
+        },
+        {
+          "module": "test_numbered_lists.py",
+          "exit_code": 0,
+          "tests": 2,
+          "seconds": 0.46
+        },
+        {
+          "module": "test_panel_updates.py",
+          "exit_code": 0,
+          "tests": 4,
+          "seconds": 1.18
+        },
+        {
+          "module": "test_references.py",
+          "exit_code": 0,
+          "tests": 8,
+          "seconds": 0.39
+        },
+        {
+          "module": "test_ribbon.py",
+          "exit_code": 0,
+          "tests": 20,
+          "seconds": 41.01,
+          "isolated_methods": [
+            {
+              "module": "test_ribbon.py",
+              "method": "test_ribbon_is_left_and_shows_scratchpad_and_references",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.64
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_settings_icon_opens_tabbed_window",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 2.01
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_project_tree_toggles_and_switches_left_panels",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.75
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_general_project_location_updates_tree_and_survives_restart",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 3.5
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_project_file_activation_respects_unsaved_changes",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.67
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_settings_controls_apply_and_persist",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 2.91
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_settings_close_waits_for_update_worker",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 2.07
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_reference_icons_toggle_and_switch_left_panels",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.64
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_hovering_reference_icons_does_not_open_popup_or_panel",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.54
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_reference_icons_search_selection_only_when_opening",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.71
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_reference_close_button_allows_reopening_from_icon",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.63
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_open_reference_without_selection_keeps_existing_search",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.73
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_open_reference_ignores_whitespace_selection",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.76
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_ctrl_l_searches_hovered_word_and_preserves_selection",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.71
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_ctrl_l_ignores_whitespace_punctuation_and_outside_document",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.51
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_ctrl_l_resolves_word_after_scrolling",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.54
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_switching_reference_and_scratchpad_preserves_notes",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.64
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_auto_hide_reveal_leave_and_pin",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 6.34
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_slide_and_return_during_close",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.07
+            },
+            {
+              "module": "test_ribbon.py",
+              "method": "test_preference_survives_reopening_and_heading_setting",
+              "exit_code": 0,
+              "tests": 1,
+              "seconds": 1.64
+            }
+          ]
+        },
+        {
+          "module": "test_scratchpad.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 6,
+          "seconds": 10.5
+        },
+        {
+          "module": "test_shutdown.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 1,
+          "seconds": 2.59
+        },
+        {
+          "module": "test_source_stats.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 3,
+          "seconds": 0.82
+        },
+        {
+          "module": "test_spelling.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 5,
+          "seconds": 18.46
+        },
+        {
+          "module": "test_spelling_batches.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 8,
+          "seconds": 2.52
+        },
+        {
+          "module": "test_tables_rules.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 11,
+          "seconds": 0.57
+        },
+        {
+          "module": "test_themes.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 10,
+          "seconds": 120.08,
+          "initial_exit_code": 124,
+          "isolated_verification": [
+            {
+              "method": "test_registration_tokens_and_contrast",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_semantic_token_defaults_and_overrides",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_bracketed_text_uses_its_token",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_switch_preserves_document_and_typography",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_selection_persists_and_restores",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_switch_keeps_selected_font_size",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_persistence_in_a_new_process",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_switch_preserves_clean_file_and_serialization",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_invalid_saved_id_falls_back_and_system_is_available",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_source_highlighting_and_plain_text_mode",
+              "exit_code": 0,
+              "tests": 1
+            }
+          ]
+        },
+        {
+          "module": "test_title_path.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 4,
+          "seconds": 3.4
+        },
+        {
+          "module": "test_update_helper.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 1,
+          "seconds": 0.32
+        },
+        {
+          "module": "test_update_scheduling.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 5,
+          "seconds": 15.18
+        },
+        {
+          "module": "test_updater.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 7,
+          "seconds": 0.27
+        },
+        {
+          "module": "test_window_geometry.py",
+          "method": null,
+          "exit_code": 0,
+          "tests": 9,
+          "seconds": 82.47,
+          "initial_exit_code": -15,
+          "isolated_verification": [
+            {
+              "method": "test_platform_selection_preserves_explicit_choices_and_wayland_only_sessions",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_restores_normal_size_and_position",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_restores_window_aligned_to_right_screen_edge",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_restores_maximized_state_and_previous_normal_geometry",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_cancelled_close_does_not_replace_saved_geometry",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_close_button_works_with_each_menu_open",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_close_from_menu_can_be_cancelled_for_unsaved_changes",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_close_hover_matches_normal_appearance_with_menus_open",
+              "exit_code": 0,
+              "tests": 1
+            },
+            {
+              "method": "test_minimized_window_reopens_visible",
+              "exit_code": 0,
+              "tests": 1
+            }
+          ]
+        }
+      ],
+      "additional_verification": "After the final table cache changes, all 11 table tests and 4 panel cache tests passed again; py_compile and git diff --check passed."
+    }
+  },
+  "test_method": "All 178 baseline and 182 optimized tests passed. Tests ran in offscreen subprocesses. Ribbon module runs timed out at 180 seconds and theme modules at 120 seconds in both versions; their tests all passed individually. Geometry module runs were stopped after more than 80 seconds to finish the tests individually; all passed. One optimized heading-panel settings assertion failed once, then passed individually and in a full module rerun. Initial exit codes and rerun results are retained in module records.",
+  "limits": "Synthetic offscreen measurements, not desktop input latency. Ordinary character edits are local to a paragraph; newline edits can compare the shifted tail. Long individual paragraphs still require scanning that paragraph.",
+  "trials_ms": {
+    "before": [
+      {
+        "prose_500_status_ms": 0.2434,
+        "prose_500_clean_query_ms": 0.048,
+        "prose_500_dirty_query_ms": 0.0475,
+        "prose_500_typing_ms": 1.5741,
+        "prose_5000_status_ms": 3.9924,
+        "prose_5000_clean_query_ms": 0.4912,
+        "prose_5000_dirty_query_ms": 0.4695,
+        "prose_5000_typing_ms": 6.3772,
+        "table_repaint_ms": 12.3591,
+        "table_rebuild_and_paint_ms": 112.8674
+      },
+      {
+        "prose_500_status_ms": 0.2787,
+        "prose_500_clean_query_ms": 0.0527,
+        "prose_500_dirty_query_ms": 0.0513,
+        "prose_500_typing_ms": 1.9673,
+        "prose_5000_status_ms": 4.1,
+        "prose_5000_clean_query_ms": 0.7541,
+        "prose_5000_dirty_query_ms": 0.5008,
+        "prose_5000_typing_ms": 6.5733,
+        "table_repaint_ms": 14.8019,
+        "table_rebuild_and_paint_ms": 138.396
+      },
+      {
+        "prose_500_status_ms": 0.2636,
+        "prose_500_clean_query_ms": 0.0499,
+        "prose_500_dirty_query_ms": 0.0496,
+        "prose_500_typing_ms": 1.695,
+        "prose_5000_status_ms": 4.0524,
+        "prose_5000_clean_query_ms": 0.6688,
+        "prose_5000_dirty_query_ms": 0.586,
+        "prose_5000_typing_ms": 6.9161,
+        "table_repaint_ms": 14.4498,
+        "table_rebuild_and_paint_ms": 138.8814
+      }
+    ],
+    "after": [
+      {
+        "prose_500_status_ms": 0.0015,
+        "prose_500_clean_query_ms": 0.0007,
+        "prose_500_dirty_query_ms": 0.0002,
+        "prose_500_typing_ms": 1.0732,
+        "prose_5000_status_ms": 0.0016,
+        "prose_5000_clean_query_ms": 0.0007,
+        "prose_5000_dirty_query_ms": 0.0002,
+        "prose_5000_typing_ms": 1.195,
+        "table_repaint_ms": 8.3124,
+        "table_rebuild_and_paint_ms": 140.8305
+      },
+      {
+        "prose_500_status_ms": 0.0019,
+        "prose_500_clean_query_ms": 0.0007,
+        "prose_500_dirty_query_ms": 0.0002,
+        "prose_500_typing_ms": 1.301,
+        "prose_5000_status_ms": 0.0018,
+        "prose_5000_clean_query_ms": 0.0007,
+        "prose_5000_dirty_query_ms": 0.0002,
+        "prose_5000_typing_ms": 1.244,
+        "table_repaint_ms": 9.1467,
+        "table_rebuild_and_paint_ms": 140.6772
+      },
+      {
+        "prose_500_status_ms": 0.0034,
+        "prose_500_clean_query_ms": 0.0015,
+        "prose_500_dirty_query_ms": 0.0005,
+        "prose_500_typing_ms": 1.3565,
+        "prose_5000_status_ms": 0.0016,
+        "prose_5000_clean_query_ms": 0.0007,
+        "prose_5000_dirty_query_ms": 0.0002,
+        "prose_5000_typing_ms": 1.4795,
+        "table_repaint_ms": 10.3796,
+        "table_rebuild_and_paint_ms": 148.7016
+      }
+    ]
+  },
+  "interpretation": "Large-note typing was 5.28x faster and table repainting 1.58x faster. Full table rebuild plus paint was approximately 1.8% slower (138.396 to 140.8305 ms); caching mainly benefits repeated edits and repaints. Measurements are synthetic offscreen timings, not desktop input latency."
+}

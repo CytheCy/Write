@@ -291,6 +291,54 @@ class HeadingBlockData(QTextBlockUserData):
         self.spelling = None
 
 
+class SourceStats:
+    """Exact source and word totals, updated only for edited paragraphs.
+
+    Qt's modified flag also follows presentation changes. Keep a separate saved
+    source baseline so undo, formatting, and edits with equal lengths stay exact.
+    """
+
+    def __init__(self):
+        self.blocks = ['']
+        self.counts = [0]
+        self.saved = ['']
+        self.word_count = 0
+        self.differences = 0
+
+    def mismatch(self, index):
+        return index >= len(self.saved) or self.blocks[index] != self.saved[index]
+
+    @property
+    def dirty(self):
+        return len(self.blocks) != len(self.saved) or self.differences != 0
+
+    def mark_saved(self):
+        self.saved = self.blocks.copy()
+        self.differences = 0
+
+    def update(self, document, position, added):
+        first = document.findBlock(position).blockNumber()
+        last = document.findBlock(position + added).blockNumber() + 1
+        delta = document.blockCount() - len(self.blocks)
+        old_end = last - delta
+        texts = []
+        block = document.findBlock(position)
+        for _ in range(first, last):
+            # Match QTextDocument.toPlainText's whitespace normalization.
+            texts.append(block.text().replace('\u00a0', ' ').replace('\u2028', '\n'))
+            block = block.next()
+        counts = [len(text.split()) for text in texts]
+        # A newline shifts saved paragraph indices. Ordinary character edits
+        # only compare the touched range; structural edits also compare the tail.
+        stop = len(self.blocks) if delta else old_end
+        self.differences -= sum(self.mismatch(i) for i in range(first, stop))
+        self.word_count += sum(counts) - sum(self.counts[first:old_end])
+        self.blocks[first:old_end] = texts
+        self.counts[first:old_end] = counts
+        stop = len(self.blocks) if delta else last
+        self.differences += sum(self.mismatch(i) for i in range(first, stop))
+
+
 class PanelBlock:
     """Live paragraph and reusable presentation objects for code or a table row."""
 
@@ -303,6 +351,55 @@ class PanelBlock:
         self.table_selection = None
         self.docs = None
         self.parity = None
+        self.table_layout = None
+
+
+class TableLayout:
+    """Intrinsic column widths and cell layouts shared across repaints."""
+
+    def __init__(self, alignment, rows):
+        self.alignment = alignment
+        self.rows = rows
+        self.natural = [max(64.0, max((self.intrinsic_width(docs[i]) + 24
+                        for _, docs in rows if i < len(docs)), default=64.0))
+                        for i in range(len(alignment))]
+        self.available = None
+        self.widths = []
+        self.prepared = {}
+
+    @staticmethod
+    def intrinsic_width(doc):
+        width = doc.property('intrinsic_width')
+        if width is None:
+            width = doc.idealWidth()
+            doc.setProperty('intrinsic_width', width)
+        return width
+
+    def fit(self, available):
+        if available == self.available:
+            return self.widths
+        total = sum(self.natural)
+        count = len(self.alignment)
+        self.widths = ([width + (available - total) / count for width in self.natural]
+                       if total <= available else
+                       [available * width / total for width in self.natural])
+        self.available = available
+        return self.widths
+
+    def prepare_cell(self, doc, column):
+        width = max(1, self.widths[column] - 16)
+        alignment = self.alignment[column]
+        if self.prepared.get(doc) != (width, alignment):
+            doc.setTextWidth(width)
+            cursor = QTextCursor(doc)
+            cursor.select(QTextCursor.SelectionType.Document)
+            paragraph = cursor.blockFormat()
+            paragraph.setAlignment({'left': Qt.AlignmentFlag.AlignLeft,
+                                    'center': Qt.AlignmentFlag.AlignHCenter,
+                                    'right': Qt.AlignmentFlag.AlignRight}[alignment])
+            cursor.mergeBlockFormat(paragraph)
+            self.prepared[doc] = (width, alignment)
+        return width
 
 
 class MarkdownHighlighter(QSyntaxHighlighter):
@@ -549,6 +646,7 @@ class NoteEditor(QTextEdit):
 
     def __init__(self):
         super().__init__()
+        self.source_stats = SourceStats()
         self._formatting_document = False
         self.paragraph_spacing = 0
         self._cursor_dismissed = False
@@ -565,6 +663,7 @@ class NoteEditor(QTextEdit):
         self._find_selections = []
         self.code_panels = []
         self.table_regions = []
+        self._table_layouts = {}
         self._table_edit_position = None
         self._copy_pressed_panel = None
         self._hovered_code_panel = None
@@ -618,6 +717,7 @@ class NoteEditor(QTextEdit):
         # contentsChange reports character edits separately from that display work.
         if not self._formatting_document and (removed or added):
             document = self.document()
+            self.source_stats.update(document, position, added)
             # Qt highlights the edited range and propagates changed block states.
             # Table recognition also looks ahead one line, so refresh the range's
             # neighbors after Qt finishes processing the edit. QTextBlocks follow
@@ -642,6 +742,7 @@ class NoteEditor(QTextEdit):
         document.setDefaultFont(old_document.defaultFont())
         document.setDocumentMargin(old_document.documentMargin())
         document.setPlainText(text)
+        self.source_stats.update(document, 0, document.characterCount() - 1)
         old_document.modificationChanged.disconnect(self.modificationChanged)
         # Swap complete documents rather than deleting live paragraphs inside
         # QTextEdit's current document while its layout and cursors are active.
@@ -675,6 +776,7 @@ class NoteEditor(QTextEdit):
         self._panel_full_update = True
         self.code_panels = []
         self.table_regions = []
+        self._table_layouts.clear()
         self._copy_pressed_panel = None
         self._hovered_code_panel = None
         self._hovered_link = False
@@ -734,6 +836,8 @@ class NoteEditor(QTextEdit):
         # An explicit rebuild also consumes any previously queued request.
         self._code_update_timer.stop()
         self._panel_full_update = False
+        if full:
+            self._table_layouts.clear()
         highlighter = getattr(self, 'highlighter', None)
         neighbors, self._highlight_neighbors = self._highlight_neighbors, []
         if highlighter is not None and highlighter.enabled:
@@ -771,6 +875,7 @@ class NoteEditor(QTextEdit):
                 block = record.block
                 if full:
                     record.code_selections = record.table_selection = record.docs = None
+                    record.table_layout = None
                 if record.kind == 'table':
                     # Alternating row shading follows paragraph numbering.
                     parity = block.blockNumber() % 2 if record.state == 4 else 0
@@ -804,6 +909,7 @@ class NoteEditor(QTextEdit):
             self.update_table_regions(records)
         else:
             self.table_regions = []
+            self._table_layouts.clear()
         if selections_changed:
             self.refresh_extra_selections()
         if self._hovered_code_panel not in self.code_panels:
@@ -852,6 +958,7 @@ class NoteEditor(QTextEdit):
 
     def update_table_regions(self, records):
         self.table_regions = []
+        layouts = {}
         index = 0
         while index < len(records):
             record = records[index]
@@ -874,6 +981,14 @@ class NoteEditor(QTextEdit):
                 if index < len(records) and current.block.next() != records[index].block:
                     break
             self.table_regions.append((delimiter.block.position(), alignment, rows))
+            # Lists compare document identity and positions, detecting edits,
+            # row shifts, and full appearance rebuilds without touching cells.
+            layout = delimiter.table_layout
+            if layout is None or layout.alignment != alignment or layout.rows != rows:
+                layout = TableLayout(alignment, rows)
+                delimiter.table_layout = layout
+            layouts[delimiter.block.position()] = layout
+        self._table_layouts = layouts
 
     def keyPressEvent(self, event):  # noqa: N802 (Qt API)
         if (getattr(self, 'highlighter', None) is not None
@@ -1037,14 +1152,8 @@ class NoteEditor(QTextEdit):
             left = self.cursorRect(QTextCursor(first)).left()
             available = max(1, self.viewport().width() - left - left_margin)
             count = len(alignment)
-            natural = [max(64.0, max((docs[i].idealWidth() + 24
-                                      for _, docs in rows if i < len(docs)), default=64.0))
-                       for i in range(count)]
-            total = sum(natural)
-            if total <= available:
-                widths = [width + (available - total) / count for width in natural]
-            else:
-                widths = [available * width / total for width in natural]
+            layout = self._table_layouts[delimiter_position]
+            widths = layout.fit(available)
             boundaries = [left]
             for width in widths:
                 boundaries.append(boundaries[-1] + width)
@@ -1072,15 +1181,7 @@ class NoteEditor(QTextEdit):
                 if position == editing:
                     continue
                 for column, doc in enumerate(docs[:count]):
-                    width = max(1, widths[column] - 16)
-                    doc.setTextWidth(width)
-                    content = QTextCursor(doc)
-                    content.select(QTextCursor.SelectionType.Document)
-                    paragraph = content.blockFormat()
-                    paragraph.setAlignment({'left': Qt.AlignmentFlag.AlignLeft,
-                                            'center': Qt.AlignmentFlag.AlignHCenter,
-                                            'right': Qt.AlignmentFlag.AlignRight}[alignment[column]])
-                    content.mergeBlockFormat(paragraph)
+                    width = layout.prepare_cell(doc, column)
                     painter.save()
                     cell = QRectF(boundaries[column] + 8, top, width, bottom - top)
                     painter.setClipRect(cell)
@@ -2159,8 +2260,8 @@ class MainWindow(QMainWindow):
         folder_button = BoxIconButton("folder-open", self.ribbon)
         folder_button.setFixedSize(36, 36)
         folder_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        folder_button.setAccessibleName("Project tree")
-        folder_button.setToolTip("Project tree")
+        folder_button.setAccessibleName("Project Tree")
+        folder_button.setToolTip("Project Tree")
         folder_button.setCheckable(True)
         folder_button.clicked.connect(self.toggle_project_tree)
         layout.addWidget(folder_button)
@@ -3328,9 +3429,30 @@ class MainWindow(QMainWindow):
         self.update_find_matches()
 
     def has_unsaved_changes(self):
-        # Display-only formatting can reset Qt's modified flag after an edit.
-        # The source text last written to disk is the close prompt's authority.
-        return self.document_source() != self._saved_text
+        if not self._saved_components_valid:
+            return self.document_source() != self._saved_text
+        if self.editor.source_stats.dirty or self.scratchpad_editor.source_stats.dirty:
+            return True
+        anchor = self._scratch_anchor.position() if self._scratch_anchor else None
+        if self._scratch_raw and anchor != self._saved_anchor:
+            # Undo can restore the text while leaving a metadata insertion
+            # cursor at a different boundary. Compare serialization in that case.
+            return self.document_source() != self._saved_text
+        return False
+
+    @property
+    def _saved_text(self):
+        return self._saved_source
+
+    @_saved_text.setter
+    def _saved_text(self, text):
+        self._saved_source = text
+        self._saved_components_valid = (hasattr(self, 'scratchpad_editor')
+                                        and self.document_source() == text)
+        if self._saved_components_valid:
+            self.editor.source_stats.mark_saved()
+            self.scratchpad_editor.source_stats.mark_saved()
+            self._saved_anchor = self._scratch_anchor.position() if self._scratch_anchor else None
 
     def update_title(self):
         self.reload_action.setEnabled(self.current_file is not None)
@@ -3344,7 +3466,7 @@ class MainWindow(QMainWindow):
 
     def update_status(self):
         self.update_headings()
-        count = len(self.editor.toPlainText().split())
+        count = self.editor.source_stats.word_count
         self.count_label.setText(f"{count} word{'s' if count != 1 else ''}")
 
     def closeEvent(self, event):  # noqa: N802

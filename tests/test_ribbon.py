@@ -47,7 +47,7 @@ class RibbonTests(unittest.TestCase):
         buttons = w.ribbon.findChildren(QToolButton)
         self.assertEqual(len(buttons), 6)
         self.assertEqual(buttons[0].icon_name, 'folder-open')
-        self.assertEqual(buttons[0].accessibleName(), 'Project tree')
+        self.assertEqual(buttons[0].accessibleName(), 'Project Tree')
         self.assertEqual(buttons[1].icon_name, 'notepad')
         self.assertEqual(buttons[1].accessibleName(), 'Scatchpad')
         self.assertGreater(buttons[1].y(), buttons[0].y())

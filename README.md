@@ -165,6 +165,28 @@ themes and their dialogs are in `artifacts/`; refresh them with
 `python3 packaging/capture-screenshots.py`. A real KDE session is still needed
 to assess compositor decorations and native desktop interaction.
 
+Editor performance can be measured separately from the regression suite:
+
+```bash
+QT_QPA_PLATFORM=offscreen python3 tests/benchmark_editor.py --output /tmp/write-performance.json
+```
+
+The benchmark reports median milliseconds per operation over five samples after
+warmup. It measures status updates, clean/dirty source checks, and typing with an
+event-loop flush in 6,000- and 60,000-word notes, plus repainting and rebuilding a
+120-row, four-column table. Spell checking is disabled and Find is closed to
+isolate these paths. Run before and after on the same machine without other test
+processes running; offscreen timings do not measure desktop input or compositor
+latency. The recorded comparison is in `artifacts/editor-performance.json`.
+
+Word totals and saved-source differences are maintained per paragraph, so
+ordinary edits only inspect the changed paragraphs. Adding or deleting newlines
+also updates saved comparisons for the shifted paragraphs. Saving takes a new
+source baseline; undo and manual restoration compare exact text independently
+of Qt's display-related modified flag. Table intrinsic widths are cached until
+content or appearance changes, and visible cell layouts are reused until their
+width or alignment changes.
+
 ## Building and releasing an RPM
 
 The packaging scripts build and validate Write RPMs. No GitHub Actions workflow
