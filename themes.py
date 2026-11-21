@@ -149,6 +149,7 @@ def stylesheet(t):
         #toolbarRibbon QToolButton {{ background: transparent; border: none; padding: 0; }}
         #toolbarRibbon QToolButton:hover {{ background: {t['hover']}; }}
         #toolbarRibbon QToolButton:checked {{ background: {t['selection']}; }}
+        #toolbarRibbon QToolButton::menu-indicator {{ image: none; }}
         #ribbonReveal {{ background: {t['border']}; }}
         #ribbonReveal:hover {{ background: {t['accent']}; }}
         QSplitter#contentSplitter::handle {{ background: {t['border']}; }}

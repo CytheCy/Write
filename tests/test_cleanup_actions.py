@@ -1,4 +1,4 @@
-"""File cleanup actions apply their shortcuts and undo as single edits."""
+"""Tools cleanup actions apply their shortcuts and undo as single edits."""
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import tempfile
@@ -40,7 +40,7 @@ class CleanupActionTests(unittest.TestCase):
         self.app.processEvents()
 
     def test_combined_cleanup_shortcut_and_single_undo(self):
-        action = next(a for a in self.window.file_menu.actions()
+        action = next(a for a in self.window.tools_menu.actions()
                       if a.text() == 'Remove Extra Spaces and ↵')
         self.assertEqual(action.shortcut(), QKeySequence('Ctrl+\\'))
         source = '#  \n😀  one  \n\n\ntwo  words'
@@ -51,7 +51,7 @@ class CleanupActionTests(unittest.TestCase):
         self.assertEqual(self.editor.toPlainText(), source)
 
     def test_remove_list_markers_shortcut_and_single_undo(self):
-        action = next(a for a in self.window.file_menu.actions()
+        action = next(a for a in self.window.tools_menu.actions()
                       if a.text() == 'Remove Bullets and Numbering')
         self.assertEqual(action.shortcut(), QKeySequence('Ctrl+/'))
         source = '- First\n* Second\n+ Third\n01. Fourth\n9) Fifth\n- - -\n```\n- code\n```\nPlain'

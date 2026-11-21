@@ -75,7 +75,7 @@ Tables with a header and a delimiter row display as aligned cells with borders. 
 
 Use **File → Open Recent** to reopen one of your last 10 opened or saved files. The list is remembered across restarts; **Clear Recent** clears it.
 
-Use **File → Reload Document** to reread the current file from disk. If you have unsaved changes, Write asks whether to save, discard, or cancel before reloading.
+Use **Tools → Reload Document** to reread the current file from disk. If you have unsaved changes, Write asks whether to save, discard, or cancel before reloading.
 
 The folder icon at the top of the left ribbon toggles the **Project tree** panel. Choose its root folder in **Settings → General → Project tree location**; your choice is saved across restarts. Expand folders and click a file (or press Enter) to replace the current document. Unsaved changes prompt you to save, discard, or cancel. **Ctrl+click** a file to open it in a new tab, keeping the current document open.
 
@@ -99,6 +99,8 @@ Click the **Dictionary** (A–Z), **Thesaurus**, or **Moby Thesaurus** (whale) r
 
 Hover over a word in the document and press **Ctrl+L** to open Dictionary and search for that word. Your text selection and caret stay in place. Hovering over empty space does nothing.
 
+Click the **Tools** icon above Settings for **Find** (**Ctrl+F**), **Replace** (**Ctrl+R**), **Reload Document**, and the text cleanup commands.
+
 Click the **Settings** gear at the bottom of the left ribbon to open a settings window with **Themes**, **Appearance**, **Shortcut Keys**, **Updates**, and **General** tabs. Appearance includes font size, paragraph spacing, page width, and panel visibility. Shortcut Keys lists the available keyboard shortcuts.
 
 Open **Settings → General** to select the `.txt` files containing your Merriam-Webster Collegiate Dictionary and Thesaurus keys directly on the tab. Each file selector shows the saved location and whether the file exists. You can also use **API key files…** in a reference panel. Only file paths are saved; keys are read when searching. Lookups require an internet connection. Switching back to Scatchpad preserves your scratch notes.
@@ -115,9 +117,9 @@ destinations, URLs, and email addresses are skipped. Toggle checking with
 **Settings → General → Spell check (English)**; this preference is also remembered.
 Existing installations should rerun `bash install.sh` to install the new dependency.
 
-Use **File → Remove Extra Spaces and ↵** (**Ctrl+\\**) to collapse repeated spaces, remove spaces beside newlines, and collapse consecutive line breaks throughout the note. Empty Markdown headings such as `# ` keep one space after the marker. Tabs are preserved. Undo restores the cleanup in one step.
+Use **Tools → Remove Extra Spaces and ↵** (**Ctrl+\\**) to collapse repeated spaces, remove spaces beside newlines, and collapse consecutive line breaks throughout the note. Empty Markdown headings such as `# ` keep one space after the marker. Tabs are preserved. Undo restores the cleanup in one step.
 
-Use **File → Remove Bullets and Numbering** (**Ctrl+/**) to remove Markdown list markers while keeping each item's text. Fenced code and horizontal rules are preserved. Undo restores the markers in one step.
+Use **Tools → Remove Bullets and Numbering** (**Ctrl+/**) to remove Markdown list markers while keeping each item's text. Fenced code and horizontal rules are preserved. Undo restores the markers in one step.
 
 Each newline displays as a paragraph break with extra space after it. Adjust the gap in **Settings → Appearance → Paragraph spacing**. This changes the display only; saved files keep their original newlines.
 

@@ -91,7 +91,7 @@ class FileSwitchingTests(unittest.TestCase):
 
     def test_reload_action_reads_external_changes(self):
         self.first.write_bytes(b'\xef\xbb\xbf# Updated\r\nFrom disk\r\n')
-        action = next(action for action in self.window.file_menu.actions()
+        action = next(action for action in self.window.tools_menu.actions()
                       if action.text() == 'Reload Document')
         self.assertTrue(action.isEnabled())
         with patch.object(QMessageBox, 'exec') as prompt:

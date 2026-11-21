@@ -2416,7 +2416,6 @@ class MainWindow(QMainWindow):
         actions = [
             ("New", QKeySequence.StandardKey.New, self.new_file),
             ("Open…", QKeySequence.StandardKey.Open, self.choose_file),
-            ("Reload Document", None, self.reload_document),
             ("Save", QKeySequence.StandardKey.Save, self.save_file),
             ("Save as…", QKeySequence.StandardKey.SaveAs, self.save_as),
             ("Close Tab", QKeySequence.StandardKey.Close, self.close_tab),
@@ -2428,9 +2427,6 @@ class MainWindow(QMainWindow):
             action.triggered.connect(callback)
             menu.addAction(action)
             self.addAction(action)
-            if label == "Reload Document":
-                self.reload_action = action
-                action.setEnabled(self.current_file is not None)
             if shortcut == QKeySequence.StandardKey.Open:
                 self.recent_menu = QMenu("Open Recent", menu)
                 menu.addMenu(self.recent_menu)
@@ -2442,33 +2438,38 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda checked=False, step=step:
                                     self.activate_tab((self._active_tab + step) % len(self._tabs)))
             self.addAction(action)
-        menu.addSeparator()
+        self.tools_menu = QMenu("Tools", self)
         find_action = QAction("Find", self)
         find_action.setShortcut(QKeySequence.StandardKey.Find)
         find_action.triggered.connect(self.open_find)
-        menu.addAction(find_action)
+        self.tools_menu.addAction(find_action)
         self.addAction(find_action)
         replace_action = QAction("Replace", self)
         replace_action.setShortcut(QKeySequence("Ctrl+R"))
         replace_action.triggered.connect(self.open_replace)
-        menu.addAction(replace_action)
+        self.tools_menu.addAction(replace_action)
         self.addAction(replace_action)
         dictionary_action = QAction("Look Up Hovered Word", self)
         dictionary_action.setShortcut(QKeySequence("Ctrl+L"))
         dictionary_action.triggered.connect(self.lookup_hovered_word)
-        menu.addAction(dictionary_action)
         self.addAction(dictionary_action)
-        menu.addSeparator()
+        self.tools_menu.addSeparator()
         cleanup_action = QAction("Remove Extra Spaces and ↵", self)
         cleanup_action.setShortcut(QKeySequence("Ctrl+\\"))
         cleanup_action.triggered.connect(self.remove_extra_spaces_and_newlines)
-        menu.addAction(cleanup_action)
+        self.tools_menu.addAction(cleanup_action)
         self.addAction(cleanup_action)
         remove_lists_action = QAction("Remove Bullets and Numbering", self)
         remove_lists_action.setShortcut(QKeySequence("Ctrl+/"))
         remove_lists_action.triggered.connect(self.remove_bullets_and_numbering)
-        menu.addAction(remove_lists_action)
+        self.tools_menu.addAction(remove_lists_action)
         self.addAction(remove_lists_action)
+        self.tools_menu.addSeparator()
+        self.reload_action = QAction("Reload Document", self)
+        self.reload_action.triggered.connect(self.reload_document)
+        self.reload_action.setEnabled(self.current_file is not None)
+        self.tools_menu.addAction(self.reload_action)
+        self.addAction(self.reload_action)
         menu.addSeparator()
         quit_action = QAction("Quit", self)
         quit_action.setShortcut(QKeySequence.StandardKey.Quit)
@@ -2632,6 +2633,16 @@ class MainWindow(QMainWindow):
             layout.addWidget(button)
             self.ribbon_buttons[name] = button
         layout.addStretch(1)
+        tools_button = BoxIconButton("toolbox", self.ribbon)
+        tools_button.setFixedSize(36, 36)
+        tools_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        tools_button.setAccessibleName("Tools")
+        tools_button.setToolTip("Tools")
+        tools_button.setMenu(self.tools_menu)
+        tools_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        layout.addWidget(tools_button)
+        self.ribbon_buttons["Tools"] = tools_button
+
         settings_button = BoxIconButton("cog", self.ribbon)
         settings_button.setFixedSize(36, 36)
         settings_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)

@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from PySide6.QtCore import QAbstractAnimation, QPoint, QSettings, Qt
+from PySide6.QtCore import QAbstractAnimation, QPoint, QSettings, Qt, QTimer
 from PySide6.QtTest import QTest
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (QApplication, QCheckBox, QMessageBox, QPushButton,
@@ -46,7 +46,7 @@ class RibbonTests(unittest.TestCase):
         self.assertTrue(w.ribbon.isVisible())
         self.assertLess(w.ribbon.mapTo(w, QPoint()).x(), w.editor.mapTo(w, QPoint()).x())
         buttons = w.ribbon.findChildren(QToolButton)
-        self.assertEqual(len(buttons), 7)
+        self.assertEqual(len(buttons), 8)
         self.assertEqual(buttons[0].icon_name, 'folder-open')
         self.assertEqual(buttons[0].accessibleName(), 'Project Tree')
         self.assertEqual(buttons[1].icon_name, 'search')
@@ -64,9 +64,37 @@ class RibbonTests(unittest.TestCase):
         self.assertEqual(buttons[5].accessibleName(), 'Moby Thesaurus')
         self.assertGreater(buttons[4].y(), buttons[3].y())
         self.assertGreater(buttons[5].y(), buttons[4].y())
-        self.assertEqual(buttons[6].icon_name, 'cog')
-        self.assertEqual(buttons[6].accessibleName(), 'Settings')
-        self.assertEqual(w.ribbon.height() - buttons[6].geometry().bottom() - 1, 10)
+        self.assertEqual(buttons[6].icon_name, 'toolbox')
+        self.assertEqual(buttons[6].accessibleName(), 'Tools')
+        self.assertEqual(buttons[7].icon_name, 'cog')
+        self.assertEqual(buttons[7].accessibleName(), 'Settings')
+        self.assertEqual(buttons[7].y() - buttons[6].geometry().bottom() - 1, 6)
+        self.assertEqual(w.ribbon.height() - buttons[7].geometry().bottom() - 1, 10)
+
+    def test_tools_icon_opens_editing_menu(self):
+        w = self.window
+        menu = w.tools_menu
+        actions = [action for action in menu.actions() if not action.isSeparator()]
+        self.assertEqual([action.text() for action in actions],
+                         ['Find', 'Replace', 'Remove Extra Spaces and ↵',
+                          'Remove Bullets and Numbering', 'Reload Document'])
+        for action in actions:
+            self.assertNotIn(action, w.file_menu.actions())
+            self.assertIn(action, w.actions())
+        self.assertEqual(menu.title(), 'Tools')
+        self.assertEqual(w.ribbon_buttons['Tools'].toolTip(), 'Tools')
+        self.assertIs(w.ribbon_buttons['Tools'].menu(), menu)
+        visible = []
+
+        def choose_find():
+            visible.append(menu.isVisible())
+            menu.close()
+            actions[0].trigger()
+
+        QTimer.singleShot(0, choose_find)
+        QTest.mouseClick(w.ribbon_buttons['Tools'], Qt.MouseButton.LeftButton)
+        self.assertEqual(visible, [True])
+        self.assertTrue(w.find_footer.isVisible())
 
     def test_settings_icon_opens_tabbed_window(self):
         w = self.window
@@ -305,6 +333,8 @@ class RibbonTests(unittest.TestCase):
 
     def test_ctrl_l_searches_hovered_word_and_preserves_selection(self):
         w = self.window
+        self.assertNotIn('Look Up Hovered Word',
+                         [action.text() for action in w.file_menu.actions()])
         w.editor.setPlainText('Selected text, peaceful waters.')
         w.editor.selectAll()
         original = w.editor.textCursor()

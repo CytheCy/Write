@@ -42,7 +42,7 @@ class FindTests(unittest.TestCase):
         self.editor.setPlainText('One one\n😀 ONE')
         self.editor.document().setModified(False)
         self.editor.document().clearUndoRedoStacks()
-        next(action for action in self.window.menuBar().actions()[0].menu().actions()
+        next(action for action in self.window.tools_menu.actions()
              if action.text() == 'Find').trigger()
         self.assertTrue(self.window.find_footer.isVisible())
         self.assertTrue(self.window.find_input.hasFocus())
@@ -98,7 +98,7 @@ class FindTests(unittest.TestCase):
 
     def test_menu_and_shortcut_toggle_and_restore_query(self):
         self.editor.setPlainText('cat cat')
-        find_action = next(action for action in self.window.menuBar().actions()[0].menu().actions()
+        find_action = next(action for action in self.window.tools_menu.actions()
                            if action.text() == 'Find')
         find_action.trigger()
         self.window.find_input.setText('cat')
