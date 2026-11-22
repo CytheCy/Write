@@ -84,6 +84,8 @@ Use **Tools → Reload Document** to reread the current file from disk. If you h
 
 The folder icon at the top of the left ribbon toggles the **Project tree** panel. Choose its root folder in **Settings → General → Project tree location**; your choice is saved across restarts. Expand folders and click a file (or press Enter) to replace the current document. Unsaved changes prompt you to save, discard, or cancel. **Ctrl+click** a file to open it in a new tab, keeping the current document open.
 
+Right-click a Markdown file in the Project tree to choose a color from the swatch palette. The color applies to both its icon and filename; **Default color** resets it. Write saves the choice inside the file as a leading `<!-- write-project-color: #528fdf -->` comment, hidden from the writing area. Color changes save immediately without saving any pending prose edits.
+
 Click the **Search project** magnifying glass below the Project tree icon to search text throughout that folder and its subfolders. Results show collapsible file groups, match counts, and highlighted excerpts. Click an excerpt to open and select its match; use the sort menu to reverse filename order. Search includes unsaved edits in open files, ignores case, and treats the query as literal text. Binary files, symbolic links, and `.git`/`.app` internals are skipped. Broad searches show the first 2,000 matches; refine the query to find more.
 
 The toolbar ribbon on the left displays the **Scatchpad** notepad button. Click it to toggle an editable Markdown panel on the left. Scratch notes are saved as metadata in the same Markdown file and stay out of the main document, headings, in-document search, and word count. For example, this block in a Markdown file displays only its contents, starting with `# hi`, in the Scatchpad:
@@ -104,7 +106,9 @@ Click the **Dictionary** (A–Z), **Thesaurus**, or **Moby Thesaurus** (whale) r
 
 Hover over a word in the document and press **Ctrl+L** to open Dictionary and search for that word. Your text selection and caret stay in place. Hovering over empty space does nothing.
 
-Click the **Tools** icon above Settings for **Find** (**Ctrl+F**), **Replace** (**Ctrl+R**), **Reload Document**, and the text cleanup commands.
+Click the **Tools** icon above Settings for **Find** (**Ctrl+F**), **Replace** (**Ctrl+R**), **Insert Template**, **Reload Document**, and the text cleanup commands.
+
+Use **Tools → Insert Template** to choose a file from `.app/templates` in your Project folder. Click **Insert** or double-click a filename to insert its UTF-8 text at the cursor in the active document, replacing any selected text. Undo restores the previous text in one step.
 
 Click the **Settings** gear at the bottom of the left ribbon to open a settings window with **Themes**, **Appearance**, **Shortcut Keys**, **Updates**, and **General** tabs. Appearance includes font size, paragraph spacing, page width, and panel visibility. Shortcut Keys lists the available keyboard shortcuts.
 

@@ -243,6 +243,34 @@ class FindTests(unittest.TestCase):
         self.assertGreaterEqual(self.window.replace_input.width(), 80)
         self.assertLess(positions[-1].x(), self.window.replace_footer.width())
 
+    def test_search_footers_stay_within_document_beside_panels(self):
+        w = self.window
+        self.editor.setPlainText('# First\n# Second')
+        for open_footer, footer in ((w.open_find, w.find_footer),
+                                    (w.open_replace, w.replace_footer)):
+            open_footer()
+            for left_visible, heading_state in ((False, 'closed'), (True, 'closed'),
+                                                (False, 'full'), (True, 'full')):
+                w.left_panels.setVisible(left_visible)
+                w.set_heading_panel_state(heading_state)
+                w.heading_panel_animation.setCurrentTime(w.heading_panel_animation.duration())
+                for width in (1120, 1400):
+                    with self.subTest(footer=footer.objectName(), left=left_visible,
+                                      headings=heading_state, width=width):
+                        w.resize(width, 760)
+                        w.workspace_splitter.setSizes([240, width - 240])
+                        w.content_splitter.setSizes([width - 480, 240])
+                        self.app.processEvents()
+                        footer_rect = footer.rect().translated(footer.mapToGlobal(footer.rect().topLeft()))
+                        editor_rect = self.editor.rect().translated(
+                            self.editor.mapToGlobal(self.editor.rect().topLeft()))
+                        self.assertEqual(footer_rect.left(), editor_rect.left())
+                        self.assertEqual(footer_rect.right(), editor_rect.right())
+                        for panel in (w.left_panels, w.heading_panel):
+                            if panel.isVisible():
+                                panel_rect = panel.rect().translated(panel.mapToGlobal(panel.rect().topLeft()))
+                                self.assertFalse(footer_rect.intersects(panel_rect))
+
 
 if __name__ == '__main__':
     unittest.main()

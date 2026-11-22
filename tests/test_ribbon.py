@@ -82,7 +82,7 @@ class RibbonTests(unittest.TestCase):
         menu = w.tools_menu
         actions = [action for action in menu.actions() if not action.isSeparator()]
         self.assertEqual([action.text() for action in actions],
-                         ['Find', 'Replace', 'Remove Extra Spaces and ↵',
+                         ['Find', 'Replace', 'Insert Template', 'Remove Extra Spaces and ↵',
                           'Remove Bullets and Numbering', 'Reload Document'])
         for action in actions:
             self.assertNotIn(action, w.file_menu.actions())

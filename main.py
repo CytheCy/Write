@@ -48,7 +48,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
-    QFileSystemModel,
     QFrame,
     QFormLayout,
     QHBoxLayout,
@@ -65,7 +64,9 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QStyle,
     QStyleOptionTab,
+    QStyleOptionViewItem,
     QStylePainter,
+    QStyledItemDelegate,
     QTabBar,
     QTextEdit,
     QToolButton,
@@ -82,6 +83,8 @@ from spelling import Spelling
 from references import ReferenceTools
 from updater import UpdatesDialog
 from project_search import ProjectSearchPanel
+from project_colors import (ProjectFileSystemModel, ProjectColorPopup,
+                            split_project_color, color_header)
 from settings_ui import SettingsDialog
 from app_settings import ProjectSettings
 from kokoro_tts.footer import KokoroFooter
@@ -187,6 +190,40 @@ def boxicon(name: str, color: str) -> QSvgRenderer:
     if not re.search(r'\bfill\s*=', source.split('>', 1)[0]):
         source = source.replace("<svg ", f'<svg fill="{color}" ', 1)
     return QSvgRenderer(source.encode())
+
+
+@lru_cache(maxsize=64)
+def project_tree_icon(name: str, color: str, width: int, height: int, ratio: float) -> QIcon:
+    pixmap = QPixmap(round(width * ratio), round(height * ratio))
+    pixmap.setDevicePixelRatio(ratio)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    boxicon(name, color).render(painter, QRectF(0, 0, width, height))
+    painter.end()
+    return QIcon(pixmap)
+
+
+class ProjectTreeDelegate(QStyledItemDelegate):
+    def initStyleOption(self, option, index):  # noqa: N802 (Qt API)
+        super().initStyleOption(option, index)
+        model = index.model()
+        if model.isDir(index):
+            name = "folder-open" if option.state & QStyle.StateFlag.State_Open else "folder"
+        elif Path(model.filePath(index)).suffix.lower() in {".md", ".markdown"}:
+            name = "file"
+        else:
+            return
+        selected = option.state & QStyle.StateFlag.State_Selected
+        role = QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.Text
+        color = model.file_color(index)
+        if color:
+            option.palette.setColor(QPalette.ColorRole.Text, QColor(color))
+            option.palette.setColor(QPalette.ColorRole.HighlightedText, QColor(color))
+        option.icon = project_tree_icon(
+            name, color or option.palette.color(role).name(),
+            option.decorationSize.width(), option.decorationSize.height(),
+            self.parent().devicePixelRatioF())
+        option.features |= QStyleOptionViewItem.ViewItemFeature.HasDecoration
 
 
 def fmt(color: str | None = None, *, bold: bool = False, italic: bool = False,
@@ -2064,6 +2101,7 @@ class MainWindow(QMainWindow):
         self.editor = NoteEditor()
         self.editor.firstLoadPainted.connect(self.schedule_load_details)
         self._scratch_raw = ''
+        self._project_color_raw = ''
         self._scratch_original = ''
         self._scratch_anchor = None
         self._saved_text = self.editor.toPlainText()
@@ -2237,7 +2275,7 @@ class MainWindow(QMainWindow):
         close_find.setAccessibleName("Close Find")
         close_find.clicked.connect(self.close_find)
         find_layout.addWidget(close_find)
-        root_layout.addWidget(self.find_footer)
+        document_layout.addWidget(self.find_footer)
         self.find_footer.hide()
 
         self.replace_footer = QWidget()
@@ -2305,7 +2343,7 @@ class MainWindow(QMainWindow):
         close_replace.setAccessibleName("Close Replace")
         close_replace.clicked.connect(self.close_replace)
         replace_layout.addWidget(close_replace)
-        root_layout.addWidget(self.replace_footer)
+        document_layout.addWidget(self.replace_footer)
         self.replace_footer.hide()
         self.find_matches = []
         self.find_index = -1
@@ -2504,6 +2542,10 @@ class MainWindow(QMainWindow):
         replace_action.triggered.connect(self.open_replace)
         self.tools_menu.addAction(replace_action)
         self.addAction(replace_action)
+        template_action = QAction("Insert Template", self)
+        template_action.triggered.connect(self.insert_template)
+        self.tools_menu.addAction(template_action)
+        self.addAction(template_action)
         dictionary_action = QAction("Look Up Hovered Word", self)
         dictionary_action.setShortcut(QKeySequence("Ctrl+L"))
         dictionary_action.triggered.connect(self.lookup_hovered_word)
@@ -2771,20 +2813,89 @@ class MainWindow(QMainWindow):
         close.clicked.connect(self.close_left_panel)
         header.addWidget(close)
         layout.addLayout(header)
-        self.project_model = QFileSystemModel(self)
+        self.project_model = ProjectFileSystemModel(self)
         self.project_model.setReadOnly(True)
         self.project_tree = QTreeView()
         self.project_tree.setObjectName("projectTree")
         self.project_tree.setAccessibleName("Project files")
         self.project_tree.setModel(self.project_model)
+        self.project_tree.setItemDelegate(ProjectTreeDelegate(self.project_tree))
         self.project_tree.setHeaderHidden(True)
         for column in range(1, self.project_model.columnCount()):
             self.project_tree.hideColumn(column)
         self.project_tree.clicked.connect(self.open_project_item)
         self.project_tree.activated.connect(self.open_project_item)
+        self.project_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.project_tree.customContextMenuRequested.connect(self.show_project_color_popup)
         layout.addWidget(self.project_tree, 1)
         self.apply_project_tree_font_size()
         self.update_project_root()
+
+    def show_project_color_popup(self, position):
+        index = self.project_tree.indexAt(position)
+        if not index.isValid() or self.project_model.isDir(index):
+            return
+        path = Path(self.project_model.filePath(index))
+        if path.suffix.lower() not in {'.md', '.markdown'}:
+            return
+        previous = getattr(self, '_project_color_popup', None)
+        if previous is not None:
+            previous.close()
+            previous.deleteLater()
+        popup = ProjectColorPopup(path.name, self.project_model.file_color(index), self)
+        popup.colorSelected.connect(lambda color: self.set_project_file_color(path, color))
+        self._project_color_popup = popup
+        popup.adjustSize()
+        point = self.project_tree.viewport().mapToGlobal(position)
+        screen = QApplication.screenAt(point)
+        if screen:
+            area = screen.availableGeometry()
+            point.setX(max(area.left(), min(point.x(), area.right() - popup.width() + 1)))
+            point.setY(max(area.top(), min(point.y(), area.bottom() - popup.height() + 1)))
+        popup.move(point)
+        popup.show()
+        popup.swatches[0].setFocus()
+
+    def set_project_file_color(self, path, color):
+        """Persist only metadata; leave unsaved prose and undo histories intact."""
+        path = Path(path).resolve()
+        if path.suffix.lower() not in {'.md', '.markdown'}:
+            return False
+        header = color_header(color)
+        try:
+            original = path.read_bytes()
+            source = original.decode('utf-8-sig')
+            body, _old = split_project_color(source)
+            newline = '\r\n' if '\r\n' in source else ('\r' if '\r' in source else '\n')
+            content = (header.replace('\n', newline) + body).encode('utf-8')
+            if original.startswith(codecs.BOM_UTF8):
+                content = codecs.BOM_UTF8 + content
+            output = QSaveFile(str(path))
+            if not output.open(QSaveFile.OpenModeFlag.WriteOnly):
+                raise OSError(output.errorString())
+            if output.write(content) != len(content) or not output.commit():
+                error = output.errorString()
+                output.cancelWriting()
+                raise OSError(error)
+        except (OSError, UnicodeError) as error:
+            QMessageBox.warning(self, 'Could not save file color', f'{path}\n\n{error}')
+            return False
+        # Update the saved baseline as well, so resetting/undoing prose still
+        # returns the tab to its original clean state.
+        for index, tab in enumerate(self._tabs):
+            if tab.get('path') != path:
+                continue
+            if index == self._active_tab:
+                self._project_color_raw = header
+                self._saved_source = header + split_project_color(self._saved_source)[0]
+            elif tab.get('fields'):
+                fields = tab['fields']
+                fields['_project_color_raw'] = header
+                fields['_saved_source'] = header + split_project_color(fields['_saved_source'])[0]
+        self.project_model.refresh_color(path)
+        self.project_tree.viewport().update()
+        self.update_title()
+        return True
 
     def apply_project_tree_font_size(self):
         font = self.project_panel.font()
@@ -2867,7 +2978,10 @@ class MainWindow(QMainWindow):
                     if suffix and not raw.endswith('\n'):
                         raw += '\n'
                     body = prefix + raw + suffix
-                sources[path] = body
+                header = fields.get('_project_color_raw', '')
+                if header and body and not header.endswith('\n'):
+                    header += '\n'
+                sources[path] = header + body
         return sources
 
     def open_project_match(self, match):
@@ -2882,6 +2996,11 @@ class MainWindow(QMainWindow):
             return
         occurrence = min(occurrences, key=lambda m: abs(m.start() - match.start))
         start, end = occurrence.span()
+        if match.path.suffix.lower() != '.txt':
+            source, color_raw = split_project_color(source)
+            if start < len(color_raw):
+                return
+            start, end = start - len(color_raw), end - len(color_raw)
         body, scratch, raw, offset = (split_scratchpad(source)
                                       if match.path.suffix.lower() != '.txt'
                                       else (source, '', '', 0))
@@ -3281,6 +3400,58 @@ class MainWindow(QMainWindow):
         scroll = self.editor.verticalScrollBar()
         scroll.setValue(scroll.value() + offset)
 
+    def insert_template(self):
+        directory = self.project_tree_path / '.app' / 'templates'
+        try:
+            files = sorted((path for path in directory.iterdir() if path.is_file()),
+                           key=lambda path: (path.name.casefold(), path.name)) if directory.exists() else []
+        except OSError as error:
+            QMessageBox.warning(self, "Insert Template", f"Could not list templates:\n{error}")
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Insert Template")
+        dialog.resize(420, 360)
+        layout = QVBoxLayout(dialog)
+        label = QLabel("Choose a template:" if files else
+                       "No templates found. Add text files to this folder:")
+        layout.addWidget(label)
+        location = QLabel(str(directory))
+        location.setWordWrap(True)
+        layout.addWidget(location)
+        templates = QListWidget()
+        templates.setAccessibleName("Templates")
+        templates.addItems([path.name for path in files])
+        layout.addWidget(templates)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok |
+                                  QDialogButtonBox.StandardButton.Cancel)
+        insert = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        insert.setText("Insert")
+        insert.setEnabled(bool(files))
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        templates.itemActivated.connect(lambda _item: dialog.accept())
+        layout.addWidget(buttons)
+        if files:
+            templates.setCurrentRow(0)
+        templates.setFocus()
+        if dialog.exec() != QDialog.DialogCode.Accepted or templates.currentRow() < 0:
+            return
+        path = files[templates.currentRow()]
+        try:
+            source = path.read_text(encoding='utf-8')
+        except (OSError, UnicodeError) as error:
+            QMessageBox.warning(self, "Insert Template", f"Could not read {path.name}:\n{error}")
+            return
+        cursor = self.editor.textCursor()
+        cursor.beginEditBlock()
+        cursor.insertText(source)
+        self.editor.setTextCursor(cursor)
+        self.editor.set_paragraph_spacing(self.editor.paragraph_spacing)
+        cursor.endEditBlock()
+        self.editor.ensureCursorVisible()
+        self.editor.setFocus()
+
     def remove_extra_newlines(self):
         document = self.editor.document()
         positions = []
@@ -3673,6 +3844,8 @@ class MainWindow(QMainWindow):
         self._load_details_pending = False
         self.find_matches = []
         self.find_index = -1
+        source, self._project_color_raw = (split_project_color(source) if markdown
+                                          else (source, ''))
         body, scratch, raw, offset = (split_scratchpad(source) if markdown
                                       else (source, '', '', 0))
         self._scratch_anchor = None
@@ -3690,6 +3863,13 @@ class MainWindow(QMainWindow):
         self._scratch_anchor.setKeepPositionOnInsert(True)
 
     def document_source(self):
+        body = self.document_body_source()
+        header = self._project_color_raw
+        if header and body and not header.endswith('\n'):
+            header += '\n'
+        return header + body
+
+    def document_body_source(self):
         """Reassemble the file without exposing scratch metadata to prose tools."""
         body = self.editor.toPlainText()
         scratch = self.scratchpad_editor.toPlainText()
@@ -3708,6 +3888,7 @@ class MainWindow(QMainWindow):
         return prefix + raw + suffix
 
     _tab_fields = ('current_file', 'newline', 'has_bom', '_scratch_raw',
+                   '_project_color_raw',
                    '_scratch_original', '_scratch_anchor', '_saved_source',
                    '_saved_components_valid', '_saved_anchor')
 
