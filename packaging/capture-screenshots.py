@@ -56,6 +56,7 @@ def main():
         app.setStyle("Fusion")
         for theme in THEMES:
             QSettings("Write", "Write").clear()
+            QSettings("Write", "Write").setValue("project_tree_path", settings_dir)
             window = MainWindow()
             window.resize(1120, 850)
             window.set_theme(theme)

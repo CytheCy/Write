@@ -22,6 +22,7 @@ class HeadingPanelTests(unittest.TestCase):
         cls.temp = tempfile.TemporaryDirectory()
         QSettings.setDefaultFormat(QSettings.Format.IniFormat)
         QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, cls.temp.name)
+        QSettings.setPath(QSettings.Format.NativeFormat, QSettings.Scope.UserScope, cls.temp.name)
         cls.app = QApplication.instance() or QApplication([])
 
     @classmethod
@@ -30,6 +31,9 @@ class HeadingPanelTests(unittest.TestCase):
 
     def setUp(self):
         QSettings('Write', 'Write').clear()
+        self.project_settings_temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.project_settings_temp.cleanup)
+        QSettings('Write', 'Write').setValue('project_tree_path', self.project_settings_temp.name)
         self.window = MainWindow()
         self.window.show()
         self.editor = self.window.editor
@@ -172,7 +176,7 @@ class HeadingPanelTests(unittest.TestCase):
         self.app.processEvents()
         saved_width = splitter.sizes()[1]
         self.assertGreater(saved_width, 240)
-        self.assertEqual(QSettings('Write', 'Write').value('heading_panel_width', type=int), saved_width)
+        self.assertEqual(self.window.settings.value('heading_panel_width', type=int), saved_width)
 
         self.window.heading_state_actions['closed'].trigger()
         self.window.heading_auto_hide_action.trigger()
@@ -203,7 +207,7 @@ class HeadingPanelTests(unittest.TestCase):
         self.window.close()
         self.window.deleteLater()
         self.app.processEvents()
-        settings = QSettings('Write', 'Write')
+        settings = self.window.settings
         settings.setValue('heading_panel_state', 'narrow')
         settings.setValue('heading_panel_width', 400)
         with tempfile.TemporaryDirectory() as directory:
@@ -312,7 +316,7 @@ class HeadingPanelTests(unittest.TestCase):
         self.finish_panel_animation()
         self.assertTrue(w.heading_auto_hide_action.isChecked())
         self.assertTrue(w.heading_panel_menu.actions()[0].isChecked())
-        self.assertTrue(QSettings('Write', 'Write').value('heading_panel_auto_hide', type=bool))
+        self.assertTrue(self.window.settings.value('heading_panel_auto_hide', type=bool))
         self.assertFalse(w.heading_panel.isVisible())
 
         edge = QPoint(w.width() - 1, w.height() // 2)

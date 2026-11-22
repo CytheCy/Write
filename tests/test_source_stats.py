@@ -79,6 +79,7 @@ class SourceStatsTests(unittest.TestCase):
     def test_status_and_dirty_queries_do_not_copy_the_document(self):
         with tempfile.TemporaryDirectory() as directory:
             settings = QSettings(str(Path(directory) / 'settings.ini'), QSettings.Format.IniFormat)
+            settings.setValue('project_tree_path', str(Path(settings.fileName()).parent))
             settings.setValue('spell_check', False)
             with patch('main.QSettings', return_value=settings):
                 window = MainWindow()

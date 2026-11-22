@@ -39,6 +39,9 @@ class ThemeTests(unittest.TestCase):
 
     def setUp(self):
         QSettings('Write', 'Write').clear()
+        self.project_settings_temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.project_settings_temp.cleanup)
+        QSettings('Write', 'Write').setValue('project_tree_path', self.project_settings_temp.name)
         self.window = MainWindow()
         self.window.show()
         self.app.processEvents()
@@ -141,7 +144,7 @@ class ThemeTests(unittest.TestCase):
             self.app.processEvents()
             self.assertEqual(self.window.theme_id, identifier)
             self.assertTrue(dialog.findChild(QRadioButton, identifier).isChecked())
-            self.assertEqual(saved_theme_id(QSettings('Write', 'Write')), identifier)
+            self.assertEqual(saved_theme_id(self.window.settings), identifier)
             restored = MainWindow()
             self.assertEqual(restored.theme_id, identifier)
             self.assertEqual(restored.theme, THEMES[identifier])
@@ -158,7 +161,7 @@ class ThemeTests(unittest.TestCase):
                 self.assertEqual(self.window.font_size, 19)
                 self.assertEqual(self.window.editor.font().pointSize(), 19)
                 self.assertEqual(self.window.editor.document().defaultFont().pointSize(), 19)
-                self.assertEqual(QSettings('Write', 'Write').value('font_size', type=int), 19)
+                self.assertEqual(self.window.settings.value('font_size', type=int), 19)
 
         restored = MainWindow()
         self.assertEqual(restored.editor.font().pointSize(), 19)
@@ -168,7 +171,7 @@ class ThemeTests(unittest.TestCase):
         self.window.set_font_size(15)
         self.window.set_theme('tokyo-night')
         self.assertEqual(self.window.editor.font().pointSize(), 15)
-        self.assertEqual(QSettings('Write', 'Write').value('font_size', type=int), 15)
+        self.assertEqual(self.window.settings.value('font_size', type=int), 15)
 
     def test_persistence_in_a_new_process(self):
         script = """

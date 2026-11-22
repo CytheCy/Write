@@ -21,6 +21,7 @@ class RibbonTests(unittest.TestCase):
         cls.temp = tempfile.TemporaryDirectory()
         QSettings.setDefaultFormat(QSettings.Format.IniFormat)
         QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, cls.temp.name)
+        QSettings.setPath(QSettings.Format.NativeFormat, QSettings.Scope.UserScope, cls.temp.name)
         cls.app = QApplication.instance() or QApplication([])
 
     @classmethod
@@ -29,6 +30,9 @@ class RibbonTests(unittest.TestCase):
 
     def setUp(self):
         QSettings('Write', 'Write').clear()
+        self.project_settings_temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.project_settings_temp.cleanup)
+        QSettings('Write', 'Write').setValue('project_tree_path', self.project_settings_temp.name)
         self.window = MainWindow()
         self.window.show()
         self.app.processEvents()

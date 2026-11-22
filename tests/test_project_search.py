@@ -21,6 +21,8 @@ class ProjectSearchTests(unittest.TestCase):
         QSettings.setDefaultFormat(QSettings.Format.IniFormat)
         QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope,
                           cls.settings_dir.name)
+        QSettings.setPath(QSettings.Format.NativeFormat, QSettings.Scope.UserScope,
+                          cls.settings_dir.name)
         cls.app = QApplication.instance() or QApplication([])
 
     @classmethod
@@ -39,6 +41,8 @@ class ProjectSearchTests(unittest.TestCase):
         (self.root / 'binary').write_bytes(b'\x00Trinidad')
         (self.root / 'invalid').write_bytes(b'\xffTrinidad')
         (self.root / 'link').symlink_to(self.a)
+        (self.root / '.app').mkdir()
+        (self.root / '.app' / 'private.ini').write_text('Trinidad')
         QSettings('Write', 'Write').clear()
         QSettings('Write', 'Write').setValue('project_tree_path', str(self.root))
         self.window = MainWindow()

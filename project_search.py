@@ -39,7 +39,7 @@ def search_project(root, query, cancelled, snapshots=None, limit=2000):
     def walk_error(error):
         errors.append(str(error))
     for directory, folders, files in os.walk(root, onerror=walk_error):
-        folders[:] = [name for name in folders if name != '.git'
+        folders[:] = [name for name in folders if name not in ('.git', '.app')
                       and not Path(directory, name).is_symlink()]
         for name in files:
             if cancelled.is_set():

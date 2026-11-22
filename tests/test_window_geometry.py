@@ -48,6 +48,7 @@ class WindowGeometryTests(unittest.TestCase):
 
     def open_window(self):
         settings = QSettings(self.settings_path, QSettings.Format.IniFormat)
+        settings.setValue('project_tree_path', str(Path(settings.fileName()).parent))
         with patch('main.QSettings', return_value=settings):
             window = MainWindow()
         self.windows.append(window)

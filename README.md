@@ -28,11 +28,16 @@ when prompted. A separate installer shows the transaction result and offers to
 restart Write. If the release is unsigned, its key is wrong, or its RPM is older,
 the update is refused. Source installations do not support in-app RPM updates.
 
-Write uses its own settings at `~/.config/Write/Write.conf` and starts with
-fresh preferences. Existing notes can be opened directly. Subsequent Write
-upgrades preserve settings, themes, recent files, personal spelling words,
-and user notes. Future settings format changes must use a versioned migration,
-back up the affected XDG files first, and continue to read older values.
+Write saves all preferences in `.app/settings.ini` inside the folder selected
+as the **Project tree location**. This includes themes, recent files, personal
+spelling words, API key file paths, and window layout. Changing that location
+copies the active preferences to the new folder; the previous copy remains there.
+Only the project folder locator stays in `~/.config/Write/Write.conf` so Write can
+find the settings at startup. Existing preferences are migrated automatically,
+with a backup in `.app/legacy-settings-v0.ini` and storage version 1 recorded in
+the new settings file. Existing notes are preserved. Future settings format
+changes must use a versioned migration, back up affected files first, and
+continue to read older values.
 
 If you previously used `install.sh`, its per-user launcher and desktop entry
 take precedence over the RPM. Remove those generated files when switching:
@@ -79,7 +84,7 @@ Use **Tools → Reload Document** to reread the current file from disk. If you h
 
 The folder icon at the top of the left ribbon toggles the **Project tree** panel. Choose its root folder in **Settings → General → Project tree location**; your choice is saved across restarts. Expand folders and click a file (or press Enter) to replace the current document. Unsaved changes prompt you to save, discard, or cancel. **Ctrl+click** a file to open it in a new tab, keeping the current document open.
 
-Click the **Search project** magnifying glass below the Project tree icon to search text throughout that folder and its subfolders. Results show collapsible file groups, match counts, and highlighted excerpts. Click an excerpt to open and select its match; use the sort menu to reverse filename order. Search includes unsaved edits in open files, ignores case, and treats the query as literal text. Binary files, symbolic links, and `.git` internals are skipped. Broad searches show the first 2,000 matches; refine the query to find more.
+Click the **Search project** magnifying glass below the Project tree icon to search text throughout that folder and its subfolders. Results show collapsible file groups, match counts, and highlighted excerpts. Click an excerpt to open and select its match; use the sort menu to reverse filename order. Search includes unsaved edits in open files, ignores case, and treats the query as literal text. Binary files, symbolic links, and `.git`/`.app` internals are skipped. Broad searches show the first 2,000 matches; refine the query to find more.
 
 The toolbar ribbon on the left displays the **Scatchpad** notepad button. Click it to toggle an editable Markdown panel on the left. Scratch notes are saved as metadata in the same Markdown file and stay out of the main document, headings, in-document search, and word count. For example, this block in a Markdown file displays only its contents, starting with `# hi`, in the Scatchpad:
 
@@ -284,13 +289,14 @@ models. Text synthesis runs locally. For source installations on Fedora, install
 `python3.12 espeak-ng libsndfile` with DNF first; the RPM declares
 these dependencies. Write itself can continue using the system Python.
 
-The selected Project Tree folder receives a **Kodoro** folder containing
+The selected Project Tree folder receives an **.app/.kokoro** folder containing
 `request.json`, numbered `chunk-*.txt` and `chunk-*.wav` files, and `final.wav`
 after successful generation. Formatting is cleaned for speech. The opening
 chunk is about 120 characters; later chunks are about 300, preferring sentence
 boundaries, with short pauses between chunks. Start snapshots the current text
 and voice; editing or switching tabs does not change an ongoing recording.
-Starting again removes the previous generated chunks and recording from Kodoro.
+Both folders are created on the first Start if needed and reused on later runs.
+Starting again removes the previous generated chunks and recording from `.app/.kokoro`.
 Other files in that folder are preserved. Copy `final.wav` elsewhere to keep it
 before starting a new recording. Cancelled runs can leave chunks and a partial
 recording, which are cleared on the next Start.

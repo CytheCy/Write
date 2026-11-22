@@ -22,6 +22,7 @@ class UpdateSchedulingTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         settings = QSettings(str(Path(self.temp.name) / 'settings.ini'),
                              QSettings.Format.IniFormat)
+        settings.setValue('project_tree_path', str(Path(settings.fileName()).parent))
         with patch('main.QSettings', return_value=settings):
             self.window = MainWindow()
         self.editor = self.window.editor

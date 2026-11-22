@@ -12,12 +12,16 @@ class ShutdownTests(unittest.TestCase):
     def test_shutdown_releases_window_before_interpreter_finalization(self):
         script = textwrap.dedent('''\
             import gc
+            import os
             import sys
             from unittest.mock import patch
-            from PySide6.QtCore import QTimer
+            from PySide6.QtCore import QSettings, QTimer
             from PySide6.QtWidgets import QApplication, QMessageBox
             from shiboken6 import isValid
             import main
+
+            QSettings('Write', 'Write').setValue(
+                'project_tree_path', os.environ['WRITE_TEST_PROJECT_ROOT'])
 
             windows = []
             destroyed = []
@@ -66,6 +70,7 @@ class ShutdownTests(unittest.TestCase):
         for mode in ('close', 'quit'):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as root:
                 env = os.environ | {
+                    'WRITE_TEST_PROJECT_ROOT': root,
                     'QT_QPA_PLATFORM': 'offscreen',
                     'XDG_CONFIG_HOME': root,
                     'XDG_DATA_HOME': root,

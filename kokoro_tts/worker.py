@@ -21,10 +21,12 @@ def emit(**event):
 
 def prepare_folder(root: Path) -> Path:
     """Remove only Write's speech artifacts; never follow project symlinks."""
-    folder = root / 'Kodoro'
-    if folder.is_symlink():
-        raise ValueError('Kodoro must be a real folder, not a symbolic link.')
-    folder.mkdir(exist_ok=True)
+    app_folder = root / '.app'
+    folder = app_folder / '.kokoro'
+    for directory in (app_folder, folder):
+        if directory.is_symlink():
+            raise ValueError(f'{directory.name} must be a real folder, not a symbolic link.')
+        directory.mkdir(exist_ok=True)
     for path in folder.iterdir():
         if (re.fullmatch(r'chunk-\d+\.(txt|wav)', path.name)
                 or path.name in {'request.json', 'final.wav', 'final.partial.wav'}):

@@ -27,6 +27,7 @@ class DocumentLayoutTests(unittest.TestCase):
             for i in range(125)) + '\n## End\nFinal paragraph.'
         self.path.write_text(self.source)
         settings = QSettings(str(Path(self.temp.name) / 'settings.ini'), QSettings.Format.IniFormat)
+        settings.setValue('project_tree_path', str(Path(settings.fileName()).parent))
         with patch('main.QSettings', return_value=settings):
             self.window = MainWindow(self.path)
         self.window.show()

@@ -82,6 +82,7 @@ from references import ReferenceTools
 from updater import UpdatesDialog
 from project_search import ProjectSearchPanel
 from settings_ui import SettingsDialog
+from app_settings import ProjectSettings
 from kokoro_tts.footer import KokoroFooter
 
 
@@ -1994,7 +1995,7 @@ class MainWindow(QMainWindow):
         menu_bar = WindowMenuBar(self)
         menu_bar.setNativeMenuBar(False)
         self.setMenuBar(menu_bar)
-        self.settings = QSettings("Write", "Write")
+        self.settings = ProjectSettings(QSettings("Write", "Write"), initial_file)
         app = QApplication.instance()
         if not hasattr(app, 'write_system_palette'):
             app.write_system_palette = QPalette(app.palette())
@@ -2112,13 +2113,7 @@ class MainWindow(QMainWindow):
         self.left_panels.setObjectName("leftPanels")
         self.left_panels.setMinimumWidth(180)
         self.left_panels.addWidget(self.scratchpad_panel)
-        project_path = self.settings.value("project_tree_path", "", type=str)
-        if not project_path or not Path(project_path).is_dir():
-            last_file = self.settings.value("last_open_file", "", type=str)
-            candidate = initial_file or (Path(last_file) if last_file else None)
-            project_path = str(candidate.parent if candidate and candidate.parent.is_dir()
-                               else Path.home())
-        self.project_tree_path = Path(project_path)
+        self.project_tree_path = Path(self.settings.value("project_tree_path", type=str))
         self.setup_project_tree()
         self.left_panels.addWidget(self.project_panel)
         search_close = BoxIconButton("x")
@@ -2763,8 +2758,12 @@ class MainWindow(QMainWindow):
         path = Path(path).expanduser().absolute()
         if not path.is_dir():
             return False
+        try:
+            self.settings.relocate(path)
+        except OSError as error:
+            QMessageBox.warning(self, "Settings could not be saved", str(error))
+            return False
         self.project_tree_path = path
-        self.settings.setValue("project_tree_path", str(path))
         self.update_project_root()
         self.project_search.set_root(path)
         return True
@@ -4173,7 +4172,6 @@ def main() -> int:
     app.setWindowIcon(QIcon(str(Path(__file__).resolve().with_name("write.svg"))))
     app.write_system_palette = QPalette(app.palette())
     app.setStyle('Fusion')
-    apply_application_theme(app, resolve_theme(saved_theme_id(QSettings('Write', 'Write')), app.write_system_palette))
     window = MainWindow(args.file)
     window.show()
     try:

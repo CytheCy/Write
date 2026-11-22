@@ -37,6 +37,7 @@ def run():
     results = {}
     with tempfile.TemporaryDirectory() as directory:
         settings = QSettings(str(Path(directory) / 'settings.ini'), QSettings.Format.IniFormat)
+        settings.setValue('project_tree_path', directory)
         settings.setValue('spell_check', False)
         with patch('main.QSettings', return_value=settings):
             window = MainWindow()

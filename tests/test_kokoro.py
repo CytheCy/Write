@@ -30,16 +30,30 @@ class ChunkTests(unittest.TestCase):
     def test_cleanup_removes_old_artifacts_and_preserves_other_files(self):
         with tempfile.TemporaryDirectory() as root:
             folder = prepare_folder(Path(root))
+            self.assertEqual(folder, Path(root) / '.app' / '.kokoro')
+            self.assertTrue(folder.is_dir())
+            sibling = folder.parent / 'other-app-data.txt'
+            sibling.touch()
             for name in ('chunk-00001.txt', 'chunk-00001.wav', 'final.wav', 'final.partial.wav', 'request.json', 'notes.md'):
                 (folder / name).touch()
             prepare_folder(Path(root))
             self.assertEqual([p.name for p in folder.iterdir()], ['notes.md'])
+            self.assertTrue(sibling.exists())
 
     def test_cleanup_rejects_symlink(self):
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as other:
-            (Path(root) / 'Kodoro').symlink_to(other)
+            app_folder = Path(root) / '.app'
+            app_folder.mkdir()
+            (app_folder / '.kokoro').symlink_to(other)
             with self.assertRaises(ValueError):
                 prepare_folder(Path(root))
+
+    def test_cleanup_rejects_app_symlink(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as other:
+            (Path(root) / '.app').symlink_to(other)
+            with self.assertRaises(ValueError):
+                prepare_folder(Path(root))
+            self.assertFalse((Path(other) / '.kokoro').exists())
 
     def test_worker_streams_ordered_chunks_and_final_wave_matches(self):
         # Uses a deterministic pipeline; no model download in the unit suite.
@@ -82,6 +96,7 @@ class FooterTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         settings = QSettings(str(Path(self.temp.name) / 'settings.ini'), QSettings.Format.IniFormat)
+        settings.setValue('project_tree_path', str(Path(settings.fileName()).parent))
         with patch('main.QSettings', return_value=settings):
             self.window = MainWindow()
         self.window.set_project_tree_path(Path(self.temp.name))
@@ -123,6 +138,8 @@ class FooterTests(unittest.TestCase):
         with patch.object(footer.process, 'start') as start:
             footer.start()
         start.assert_called_once()
+        self.assertEqual(folder, Path(self.temp.name) / '.app' / '.kokoro')
+        self.assertEqual(start.call_args.args[1][-1], str(folder / 'request.json'))
         self.assertFalse((folder / 'chunk-00001.wav').exists())
         self.assertEqual(json.loads((folder / 'request.json').read_text())['text'], 'Read me.')
         self.assertFalse(footer.start_button.isEnabled())

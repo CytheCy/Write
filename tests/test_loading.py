@@ -23,6 +23,7 @@ class LoadingTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         settings = QSettings(str(self.root / 'settings.ini'), QSettings.Format.IniFormat)
+        settings.setValue('project_tree_path', str(Path(settings.fileName()).parent))
         settings.setValue('spell_check', False)
         with patch('main.QSettings', return_value=settings):
             self.window = MainWindow()

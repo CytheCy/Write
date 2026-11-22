@@ -28,6 +28,7 @@ class ScratchpadTests(unittest.TestCase):
         self.path = Path(self.temp.name) / 'note.md'
         self.path.write_text(BLOCK + '# Main\nVisible words\n')
         settings = QSettings(str(self.path.with_suffix('.ini')), QSettings.Format.IniFormat)
+        settings.setValue('project_tree_path', str(Path(settings.fileName()).parent))
         with patch('main.QSettings', return_value=settings):
             self.window = MainWindow(self.path)
         self.window.show()

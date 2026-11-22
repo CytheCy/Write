@@ -23,6 +23,7 @@ class TitlePathTests(unittest.TestCase):
         self.path = Path(self.temp.name) / 'a file #1.md'
         self.path.write_text('Hello')
         settings = QSettings(str(Path(self.temp.name) / 'settings.ini'), QSettings.Format.IniFormat)
+        settings.setValue('project_tree_path', str(Path(settings.fileName()).parent))
         with patch('main.QSettings', return_value=settings):
             self.window = MainWindow(self.path)
         self.window.show()

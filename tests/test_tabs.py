@@ -26,6 +26,7 @@ class TabTests(unittest.TestCase):
         self.first.write_bytes(codecs.BOM_UTF8 + b'# First\r\nBody\r\n')
         self.second.write_text('# Second\nOther text')
         settings = QSettings(str(root / 'settings.ini'), QSettings.Format.IniFormat)
+        settings.setValue('project_tree_path', str(Path(settings.fileName()).parent))
         with patch('main.QSettings', return_value=settings):
             self.window = MainWindow(self.first)
         self.window.show()

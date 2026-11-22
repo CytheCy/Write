@@ -10,13 +10,16 @@ dnf5 install -y "${package[0]}"
 export XDG_CONFIG_HOME="$test_home/config"
 export XDG_DATA_HOME="$test_home/data"
 export XDG_STATE_HOME="$test_home/state"
+export WRITE_TEST_PROJECT_ROOT="$test_home"
 mkdir -p "$XDG_DATA_HOME/Write" "$XDG_STATE_HOME/Write"
 printf 'database fixture\n' > "$XDG_DATA_HOME/Write/notes.db"
 printf 'state fixture\n' > "$XDG_STATE_HOME/Write/session"
 printf '# Saved note\n' > "$test_home/note.md"
 python3 - <<'PY'
+import os
 from PySide6.QtCore import QSettings
 s = QSettings('Write', 'Write')
+s.setValue('project_tree_path', os.environ['WRITE_TEST_PROJECT_ROOT'])
 s.setValue('theme', 'tokyo-night')
 s.setValue('recent_files', ['note.md'])
 s.setValue('font_size', 18)
@@ -38,7 +41,8 @@ app = QApplication([])
 window = MainWindow()
 assert window.theme_id == 'tokyo-night'
 assert window.font_size == 18
-assert QSettings('Write', 'Write').value('recent_files', [], type=list) == ['note.md']
+assert window.settings.value('recent_files', [], type=list) == ['note.md']
+assert QSettings('Write', 'Write').allKeys() == ['project_tree_path']
 window.show()
 app.processEvents()
 window.close()

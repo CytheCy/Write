@@ -29,6 +29,7 @@ class FileSwitchingTests(unittest.TestCase):
                               '| Name | Price |\n| --- | --- |\n| One | $1 |\nEnd')
         self.second.write_text('Second')
         self.settings = QSettings(str(root / 'settings.ini'), QSettings.Format.IniFormat)
+        self.settings.setValue('project_tree_path', str(Path(self.settings.fileName()).parent))
         with patch('main.QSettings', return_value=self.settings):
             self.window = MainWindow(self.first)
         self.window.show()
@@ -54,7 +55,7 @@ class FileSwitchingTests(unittest.TestCase):
         self.assertEqual(self.window.editor.toPlainText(), 'Second')
         self.assertFalse(self.window.has_unsaved_changes())
         self.assertFalse(self.window.editor.document().isUndoAvailable())
-        self.assertEqual(self.settings.value('last_open_file'), str(self.second))
+        self.assertEqual(self.window.settings.value('last_open_file'), str(self.second))
 
     def test_open_preserves_unsaved_document_without_prompt(self):
         changed = self.edit_first()
