@@ -18,9 +18,17 @@ class ProjectSettingsTests(unittest.TestCase):
         self.locator = QSettings(self.locator_path, QSettings.Format.IniFormat)
         self.locator.setValue('project_tree_path', str(self.root))
 
+    def test_api_key_locations_are_saved_even_before_selection(self):
+        settings = ProjectSettings(self.locator)
+        saved = QSettings(settings.fileName(), QSettings.Format.IniFormat)
+        for key in ('keys/dictionary_path', 'keys/thesaurus_path'):
+            self.assertTrue(saved.contains(key))
+            self.assertEqual(saved.value(key, type=str), '')
+
     def test_migration_preserves_types_and_backs_up_legacy_preferences(self):
         values = {'font_size': 19, 'theme': 'dark', 'spell_check': False,
                   'spelling_words': ['Write'], 'keys/dictionary_path': '/keys/api',
+                  'keys/thesaurus_path': '/keys/thesaurus.txt',
                   'recent_files': ['a.md', 'b.md'],
                   'window_normal_geometry': QRect(10, 20, 700, 500),
                   'window_geometry': QByteArray(b'geometry')}
@@ -41,6 +49,10 @@ class ProjectSettingsTests(unittest.TestCase):
         settings = ProjectSettings(self.locator)
         consumer = settings
         settings.setValue('theme', 'dark')
+        key_paths = {'keys/dictionary_path': '/keys/dictionary.txt',
+                     'keys/thesaurus_path': '/keys/thesaurus.txt'}
+        for key, path in key_paths.items():
+            settings.setValue(key, path)
         target = Path(self.temp.name) / 'other'
         target.mkdir()
         (target / '.app').mkdir()
@@ -52,6 +64,8 @@ class ProjectSettingsTests(unittest.TestCase):
         consumer.sync()
         restored = ProjectSettings(QSettings(self.locator_path, QSettings.Format.IniFormat))
         self.assertEqual(restored.value('theme'), 'dark')
+        for key, path in key_paths.items():
+            self.assertEqual(restored.value(key, type=str), path)
         self.assertFalse(restored.contains('stale_preference'))
         self.assertEqual(restored.value('spelling_words', type=list), ['portable'])
         self.assertEqual(Path(restored.fileName()), target / '.app/settings.ini')

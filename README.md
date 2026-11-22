@@ -108,7 +108,7 @@ Click the **Tools** icon above Settings for **Find** (**Ctrl+F**), **Replace** (
 
 Click the **Settings** gear at the bottom of the left ribbon to open a settings window with **Themes**, **Appearance**, **Shortcut Keys**, **Updates**, and **General** tabs. Appearance includes font size, paragraph spacing, page width, and panel visibility. Shortcut Keys lists the available keyboard shortcuts.
 
-Open **Settings → General** to select the `.txt` files containing your Merriam-Webster Collegiate Dictionary and Thesaurus keys directly on the tab. Each file selector shows the saved location and whether the file exists. You can also use **API key files…** in a reference panel. Only file paths are saved; keys are read when searching. Lookups require an internet connection. Switching back to Scatchpad preserves your scratch notes.
+Open **Settings → General** to select the `.txt` files containing your Merriam-Webster Collegiate Dictionary and Thesaurus keys directly on the tab. Each file selector shows the saved location and whether the file exists. You can also use **API key files…** in a reference panel. Both locations are saved in the project's `.app/settings.ini` as `keys/dictionary_path` and `keys/thesaurus_path` (empty until selected), and follow your settings when changing the project tree folder. Only file paths are saved; keys are read when searching. Lookups require an internet connection. Switching back to Scatchpad preserves your scratch notes.
 
 Enable **Settings → Appearance → Auto-hide toolbar ribbon** to hide it while writing. Move the pointer to the left edge of the document area to reveal it in 0.3 seconds. Like the right heading panel, it waits five seconds after the pointer leaves before sliding closed in about three quarters of a second. Returning to the ribbon cancels the countdown. Disable the option to keep the ribbon visible. Your choice is remembered across restarts.
 
@@ -277,7 +277,9 @@ The project has not declared a license; RPM metadata records this as
 Click the speaker icon (**Kokoro TTS**) in the left ribbon. Choose an American
 or British voice and click **Start** to read from the cursor in the active
 document through its end. Playback begins with the first generated chunk while
-the rest generates in the background. **Stop** cancels generation and playback;
+the rest generates in the background. **Pause** pauses playback and becomes
+**Resume**, which continues from the same position using the existing audio.
+Generation continues in the background while paused. **Stop** cancels generation and playback;
 closing the footer also stops speech. The voice choice is remembered.
 
 Write includes its own speech worker and manages a private Kokoro environment

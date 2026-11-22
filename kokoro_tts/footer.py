@@ -49,6 +49,11 @@ class KokoroFooter(QWidget):
         self.start_button.setToolTip('Read the active document from its cursor to the end')
         self.start_button.clicked.connect(self.start)
         controls.addWidget(self.start_button)
+        self.pause_button = QPushButton('Pause')
+        self.pause_button.setEnabled(False)
+        self.pause_button.setToolTip('Pause playback; resume from the same position without generating audio again')
+        self.pause_button.clicked.connect(self.toggle_pause)
+        controls.addWidget(self.pause_button)
         self.stop_button = QPushButton('Stop')
         self.stop_button.setEnabled(False)
         self.stop_button.clicked.connect(self.stop)
@@ -71,6 +76,7 @@ class KokoroFooter(QWidget):
         self.audio_output = None
         self.queue = deque()
         self.playing = False
+        self.paused = False
         self.busy = False
         self.stopped = False
         self.failed = False
@@ -84,6 +90,28 @@ class KokoroFooter(QWidget):
         self.start_button.setEnabled(not busy)
         self.voice.setEnabled(not busy)
         self.stop_button.setEnabled(busy)
+        self.pause_button.setEnabled(busy)
+        if not busy:
+            self.paused = False
+            self.pause_button.setText('Pause')
+
+    def toggle_pause(self):
+        if not self.busy or self.stopped or self.failed:
+            return
+        self.paused = not self.paused
+        self.pause_button.setText('Resume' if self.paused else 'Pause')
+        if self.paused:
+            if self.playing:
+                self.player.pause()
+            self.status.setText('Paused.')
+        else:
+            self.status.setText('Playing…' if self.playing or self.queue else 'Waiting for audio…')
+            if self.playing:
+                # Keep the current source and position: play() resumes paused media.
+                self.player.play()
+            else:
+                self.play_next()
+            self.maybe_finished()
 
     def start(self):
         if self.busy:
@@ -147,15 +175,16 @@ class KokoroFooter(QWidget):
                 self.status.setText('Kokoro: ' + event['error'])
             elif 'audio' in event:
                 self.queue.append(event['audio'])
-                self.status.setText(f"Generated {event['current']} of {event['total']} chunks; playing…")
+                if not self.paused:
+                    self.status.setText(f"Generated {event['current']} of {event['total']} chunks; playing…")
                 self.play_next()
             elif 'done' in event:
                 self.done = event['done']
-            elif 'status' in event:
+            elif 'status' in event and not self.paused:
                 self.status.setText(event['status'])
 
     def play_next(self):
-        if self.playing or not self.queue or self.stopped or self.failed:
+        if self.paused or self.playing or not self.queue or self.stopped or self.failed:
             return
         self.playing = True
         self.player.setSource(QUrl.fromLocalFile(self.queue.popleft()))
@@ -203,6 +232,8 @@ class KokoroFooter(QWidget):
 
     def stop(self):
         self.stopped = True
+        self.paused = False
+        self.pause_button.setText('Pause')
         self.queue.clear()
         self.playing = False
         if self.player:

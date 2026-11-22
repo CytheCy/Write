@@ -147,6 +147,43 @@ class TabTests(unittest.TestCase):
         self.assertEqual(w.scratchpad_editor.toPlainText(), 'Only the second file')
         self.assertTrue(w.has_unsaved_changes())
 
+    def test_formatted_tab_restore_keeps_layout_selection_scroll_and_underlines(self):
+        w = self.window
+        e = w.editor
+        spelling = e.spelling
+        self.first.write_text('# First\n' + '**speling** and *hello*.\n' * 150 + '## End\nLast paragraph')
+        w.reload_document()
+        cursor = e.document().find('speling', e.document().findBlockByNumber(40).position())
+        e.setTextCursor(cursor)
+        e.ensureCursorVisible()
+        self.app.processEvents()
+
+        def finish_spelling():
+            spelling.refresh()
+            for _ in range(10000):
+                if spelling._pending_start is None and spelling._job is None:
+                    return
+                spelling.process_batch()
+            self.fail('Spelling did not finish')
+
+        finish_spelling()
+        scroll = e.verticalScrollBar().value()
+        initial_frame = e.viewport().grab().toImage()
+        height = e.document().documentLayout().documentSize().height()
+        w.open_file(self.second)
+        w.activate_tab(0)
+        self.app.processEvents()
+        finish_spelling()
+        self.assertTrue(e.document().isLayoutEnabled())
+        self.assertEqual(e.textCursor().selectionStart(), cursor.selectionStart())
+        self.assertEqual(e.textCursor().selectionEnd(), cursor.selectionEnd())
+        self.assertEqual(e.verticalScrollBar().value(), scroll)
+        self.assertEqual(e.document().documentLayout().documentSize().height(), height)
+        self.assertEqual(e.viewport().grab().toImage(), initial_frame)
+        self.assertEqual([s.cursor.selectedText() for s in e.extraSelections()], ['speling'] * 150)
+        self.assertFalse(w.has_unsaved_changes())
+        self.assertFalse(e.document().isUndoAvailable())
+
     def click_tree_file(self, path, modifiers=Qt.KeyboardModifier.NoModifier):
         w = self.window
         w.set_project_tree_path(self.first.parent)

@@ -190,3 +190,65 @@ class FooterTests(unittest.TestCase):
         self.assertEqual(footer.process.state(), QProcess.ProcessState.NotRunning)
         self.assertFalse(footer.busy)
         self.assertEqual(footer.status.text(), 'Stopped.')
+
+    def test_pause_resumes_current_audio_without_restarting_generation(self):
+        footer = self.window.kokoro_footer
+        footer.player = Mock()
+        footer.set_busy(True)
+        footer.queue.extend(['/tmp/one.wav', '/tmp/two.wav'])
+        footer.play_next()
+        footer.player.reset_mock()
+        with patch.object(footer.process, 'start') as start, \
+                patch('kokoro_tts.footer.prepare_folder') as prepare:
+            footer.pause_button.click()
+            self.assertTrue(footer.paused)
+            self.assertEqual(footer.pause_button.text(), 'Resume')
+            footer.player.pause.assert_called_once()
+            footer.maybe_finished()
+            self.assertTrue(footer.busy)
+            footer.pause_button.click()
+            self.assertFalse(footer.paused)
+            self.assertEqual(footer.pause_button.text(), 'Pause')
+            footer.player.play.assert_called_once()
+            footer.player.setSource.assert_not_called()
+            footer.player.stop.assert_not_called()
+            start.assert_not_called()
+            prepare.assert_not_called()
+        self.assertEqual(list(footer.queue), ['/tmp/two.wav'])
+
+    def test_chunks_generated_while_paused_wait_for_resume(self):
+        from PySide6.QtMultimedia import QMediaPlayer
+        footer = self.window.kokoro_footer
+        footer.player = Mock()
+        footer.set_busy(True)
+        footer.pause_button.click()
+        payload = (json.dumps({'audio': '/tmp/one.wav', 'current': 1, 'total': 1})
+                   + '\n' + json.dumps({'done': '/tmp/final.wav'}) + '\n').encode()
+        with patch.object(footer.process, 'readAllStandardOutput', return_value=payload):
+            footer.process_finished(0, QProcess.ExitStatus.NormalExit)
+        self.assertEqual(footer.status.text(), 'Paused.')
+        self.assertTrue(footer.busy)
+        self.assertEqual(list(footer.queue), ['/tmp/one.wav'])
+        footer.player.play.assert_not_called()
+        footer.pause_button.click()
+        footer.player.play.assert_called_once()
+        self.assertEqual(footer.player.setSource.call_args.args[0].toLocalFile(), '/tmp/one.wav')
+        footer.media_status(QMediaPlayer.MediaStatus.EndOfMedia)
+        self.assertFalse(footer.busy)
+        self.assertFalse(footer.pause_button.isEnabled())
+        self.assertEqual(footer.status.text(), 'Finished — /tmp/final.wav')
+
+    def test_stop_while_paused_clears_playback_and_pause_controls(self):
+        footer = self.window.kokoro_footer
+        footer.player = Mock()
+        footer.set_busy(True)
+        footer.queue.append('/tmp/one.wav')
+        footer.play_next()
+        footer.pause_button.click()
+        footer.stop_button.click()
+        self.assertFalse(footer.paused)
+        self.assertFalse(footer.playing)
+        self.assertFalse(footer.busy)
+        self.assertFalse(footer.pause_button.isEnabled())
+        self.assertEqual(footer.pause_button.text(), 'Pause')
+        self.assertEqual(footer.status.text(), 'Stopped.')

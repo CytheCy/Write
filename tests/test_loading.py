@@ -68,6 +68,53 @@ class LoadingTests(unittest.TestCase):
             self.load('A note without scratch metadata')
             replace.assert_not_called()
 
+    def test_emphasis_heavy_load_has_final_layout_and_reachable_cursor(self):
+        w = self.window
+        e = w.editor
+        source = '# Title\n' + ''.join(
+            f'**Paragraph {i}** with *italic text* and `inline code`. '
+            + 'Words that wrap across the page. ' * 6 + '\n'
+            for i in range(160)) + '## Last heading\nFinal paragraph.'
+        path = self.load(source)
+        self.assertEqual(e.textCursor().position(), 0)
+        document = e.document()
+
+        def paragraph_heights():
+            block = document.firstBlock()
+            heights = []
+            while block.isValid():
+                heights.append(document.documentLayout().blockBoundingRect(block).height())
+                self.assertGreater(block.layout().lineCount(), 0)
+                block = block.next()
+            return heights
+
+        initial_heights = paragraph_heights()
+        self.assertTrue(all(height > 0 for height in initial_heights))
+        # A fresh highlight after loading must produce the same rendered page
+        # and paragraph geometry as the initial batched pass.
+        e.dismiss_cursor()
+        self.settle()
+        initial_heights = paragraph_heights()
+        initial_frame = e.viewport().grab().toImage()
+        w.highlighter.rehighlight()
+        self.settle()
+        self.assertEqual(paragraph_heights(), initial_heights)
+        self.assertEqual(e.viewport().grab().toImage(), initial_frame)
+
+        for block_number in (80, document.blockCount() - 1):
+            cursor = QTextCursor(document.findBlockByNumber(block_number))
+            cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
+            e.setTextCursor(cursor)
+            e.ensureCursorVisible()
+            self.app.processEvents()
+            self.assertEqual(e.textCursor().position(), cursor.position())
+            self.assertTrue(e.viewport().rect().intersects(e.cursorRect()))
+        self.assertGreater(e.verticalScrollBar().value(), 0)
+        self.assertEqual(e.toPlainText(), source)
+        self.assertEqual(path.read_text(), source)
+        self.assertFalse(w.has_unsaved_changes())
+        self.assertFalse(document.isUndoAvailable())
+
     def test_loaded_baseline_serializes_once_and_preserves_unicode(self):
         w = self.window
         with patch.object(w, 'document_source', wraps=w.document_source) as serialize:
@@ -75,6 +122,31 @@ class LoadingTests(unittest.TestCase):
             self.assertEqual(serialize.call_count, 1)
         self.assertEqual(w._saved_text, w.document_source())
         self.assertFalse(w.has_unsaved_changes())
+
+    def test_batched_load_spelling_reaches_last_paragraph_and_clears_on_replacement(self):
+        w = self.window
+        spelling = w.editor.spelling
+        spelling.set_enabled(True)
+        source = '# Title\n' + '**speling** and *hello* with `typpo`.\n' * 80 + '## End\n😀 wrng'
+        self.load(source)
+
+        def finish_spelling():
+            spelling.refresh()
+            for _ in range(10000):
+                if spelling._pending_start is None and spelling._job is None:
+                    return
+                spelling.process_batch()
+            self.fail('Spelling did not finish')
+
+        finish_spelling()
+        selections = w.editor.extraSelections()
+        self.assertEqual([s.cursor.selectedText() for s in selections], ['speling'] * 80 + ['wrng'])
+        self.assertTrue(w.editor.document().isLayoutEnabled())
+        self.assertFalse(w.has_unsaved_changes())
+        self.assertFalse(w.editor.document().isUndoAvailable())
+        self.load('Hello world', 'replacement.md')
+        finish_spelling()
+        self.assertEqual(w.editor.extraSelections(), [])
 
     def test_table_widths_are_final_before_first_paint(self):
         e = self.window.editor
@@ -231,6 +303,20 @@ class LoadingTests(unittest.TestCase):
                 self.window.open_file(path)
         self.assertTrue(self.window.updatesEnabled())
         self.assertFalse(self.window.loading)
+        self.assertTrue(self.window.editor.document().isLayoutEnabled())
+        self.assertEqual(self.window.editor._layout_batch_depth, 0)
+
+    def test_layout_is_restored_when_heading_preparation_fails(self):
+        path = self.root / 'note.md'
+        path.write_text('# Title\n**Formatted text**\n## End\nLast paragraph')
+        with patch.object(self.window, 'update_headings', side_effect=RuntimeError):
+            with self.assertRaises(RuntimeError):
+                self.window.open_file(path)
+        editor = self.window.editor
+        self.assertTrue(self.window.updatesEnabled())
+        self.assertTrue(editor.document().isLayoutEnabled())
+        self.assertEqual(editor._layout_batch_depth, 0)
+        self.assertGreater(editor.document().documentLayout().documentSize().height(), 0)
 
     def test_existing_disabled_updates_are_preserved(self):
         self.window.setUpdatesEnabled(False)

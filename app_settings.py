@@ -28,6 +28,9 @@ class ProjectSettings:
                 if not self._store.contains(key):
                     self._store.setValue(key, value)
             self._check_sync(backup)
+        for key in ('keys/dictionary_path', 'keys/thesaurus_path'):
+            if not self._store.contains(key):
+                self._store.setValue(key, '')
         self._store.setValue('settings_storage_version', 1)
         self._store.setValue('project_tree_path', str(root))
         self._check_sync(self._store)

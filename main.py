@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import codecs
 from collections import deque
+from contextlib import contextmanager
 from functools import lru_cache
 import os
 import re
@@ -784,13 +785,15 @@ class NoteEditor(QTextEdit):
         self.document().setDocumentMargin(24)
         self.setViewportMargins(26, 10, 26, 10)
         self._updating_scroll_range = False
+        self._layout_batch_depth = 0
+        self._batched_documents = []
         self.verticalScrollBar().rangeChanged.connect(self.update_scroll_range)
         self.document().documentLayout().documentSizeChanged.connect(self.update_scroll_range)
         self.update_scroll_range()
 
     def update_scroll_range(self, *_):
         """Leave half a viewport of scroll space after the actual document."""
-        if self._updating_scroll_range or self._loading_document:
+        if self._updating_scroll_range or self._loading_document or self._layout_batch_depth:
             return
         self._updating_scroll_range = True
         try:
@@ -804,6 +807,23 @@ class NoteEditor(QTextEdit):
     def setExtraSelections(self, selections):  # noqa: N802 (Qt API)
         self._spelling_selections = list(selections)
         self.refresh_extra_selections()
+
+    @contextmanager
+    def batch_document_layout(self):
+        """Lay out replacement documents once sidebar and page widths are final."""
+        self._layout_batch_depth += 1
+        try:
+            yield
+        finally:
+            try:
+                if self._layout_batch_depth == 1:
+                    for document in self._batched_documents:
+                        document.setLayoutEnabled(True)
+                    self._batched_documents.clear()
+            finally:
+                self._layout_batch_depth -= 1
+            if not self._layout_batch_depth:
+                self.update_scroll_range()
 
     def block_data(self, block):
         cache = block.userData()
@@ -843,6 +863,9 @@ class NoteEditor(QTextEdit):
             highlighter.setParent(self)
             highlighter.setDocument(None)
         document = QTextDocument(self)
+        document.setLayoutEnabled(False)
+        if self._layout_batch_depth:
+            self._batched_documents.append(document)
         document.setDefaultFont(old_document.defaultFont())
         document.setDocumentMargin(old_document.documentMargin())
         # Populate and format the detached document without notifying source
@@ -869,13 +892,17 @@ class NoteEditor(QTextEdit):
         old_document.setParent(self)
         document.contentsChange.connect(self.on_contents_change)
         document.modificationChanged.connect(self.modificationChanged)
-        if highlighter is not None:
-            highlighter.setDocument(document)
-            highlighter.active_block = (None if self._cursor_dismissed
-                                        else document.firstBlock())
-            # An explicit pass also consumes Qt's queued initial highlight.
-            highlighter.rehighlight()
-        self._loading_document = False
+        try:
+            if highlighter is not None:
+                highlighter.setDocument(document)
+                highlighter.active_block = (None if self._cursor_dismissed
+                                            else document.firstBlock())
+                # An explicit pass also consumes Qt's queued initial highlight.
+                highlighter.rehighlight()
+        finally:
+            if not self._layout_batch_depth:
+                document.setLayoutEnabled(True)
+            self._loading_document = False
         # The initial highlighter pass already recorded all panel paragraphs.
         self._panel_full_update = False
         self.sourceEdited.emit(0, removed, document.characterCount() - 1)
@@ -908,8 +935,13 @@ class NoteEditor(QTextEdit):
         document.modificationChanged.connect(self.modificationChanged)
         document.documentLayout().documentSizeChanged.connect(self.update_scroll_range)
         if highlighter:
-            highlighter.setDocument(document)
-            highlighter.rehighlight()
+            layout_enabled = document.isLayoutEnabled()
+            document.setLayoutEnabled(False)
+            try:
+                highlighter.setDocument(document)
+                highlighter.rehighlight()
+            finally:
+                document.setLayoutEnabled(layout_enabled)
         self._loading_document = False
         self.sourceChanged.emit()
         self.update_scroll_range()
@@ -2004,6 +2036,8 @@ class MainWindow(QMainWindow):
         self.theme = resolve_theme(self.theme_id, app.write_system_palette)
         self.font_size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE,
             self.settings.value("font_size", DEFAULT_FONT_SIZE, type=int)))
+        self.project_tree_font_size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE,
+            self.settings.value("project_tree_font_size", self.font().pointSize(), type=int)))
         self.paragraph_spacing = max(0, min(48, self.settings.value("paragraph_spacing", 14, type=int)))
         self.max_page_width = max(0, min(10000, self.settings.value("max_page_width", 950, type=int)))
         self.ribbon_auto_hide = self.settings.value("ribbon_auto_hide", False, type=bool)
@@ -2350,6 +2384,7 @@ class MainWindow(QMainWindow):
             self.editor.setTabStopDistance(self.editor.fontMetrics().horizontalAdvance(" ") * 4)
             self.highlighter.update_colors(self.theme)
             self.scratchpad_editor.setFont(font)
+            self.apply_project_tree_font_size()
             self.scratchpad_highlighter.update_colors(self.theme)
             self.editor.spelling.color = QColor(self.theme['error'])
             self.editor.spelling.refresh()
@@ -2723,7 +2758,12 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(self.project_panel)
         layout.setContentsMargins(10, 12, 10, 10)
         header = QHBoxLayout()
-        header.addWidget(QLabel("Project tree"), 1)
+        self.project_root_label = QLabel()
+        self.project_root_label.setWordWrap(True)
+        font = self.project_root_label.font()
+        font.setPointSizeF(font.pointSizeF() + 2)
+        self.project_root_label.setFont(font)
+        header.addWidget(self.project_root_label, 1)
         close = BoxIconButton("x", self.project_panel)
         close.setFixedSize(28, 28)
         close.setAccessibleName("Close project tree")
@@ -2731,9 +2771,6 @@ class MainWindow(QMainWindow):
         close.clicked.connect(self.close_left_panel)
         header.addWidget(close)
         layout.addLayout(header)
-        self.project_root_label = QLabel()
-        self.project_root_label.setWordWrap(True)
-        layout.addWidget(self.project_root_label)
         self.project_model = QFileSystemModel(self)
         self.project_model.setReadOnly(True)
         self.project_tree = QTreeView()
@@ -2746,7 +2783,21 @@ class MainWindow(QMainWindow):
         self.project_tree.clicked.connect(self.open_project_item)
         self.project_tree.activated.connect(self.open_project_item)
         layout.addWidget(self.project_tree, 1)
+        self.apply_project_tree_font_size()
         self.update_project_root()
+
+    def apply_project_tree_font_size(self):
+        font = self.project_panel.font()
+        font.setPointSize(self.project_tree_font_size)
+        self.project_panel.setFont(font)
+        self.project_tree.setFont(font)
+        font.setPointSize(self.project_tree_font_size + 2)
+        self.project_root_label.setFont(font)
+
+    def set_project_tree_font_size(self, points: int):
+        self.project_tree_font_size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, points))
+        self.apply_project_tree_font_size()
+        self.settings.setValue("project_tree_font_size", self.project_tree_font_size)
 
     def update_project_root(self):
         path = str(self.project_tree_path)
@@ -3793,39 +3844,37 @@ class MainWindow(QMainWindow):
         updates_enabled = self.updatesEnabled()
         self.setUpdatesEnabled(False)
         try:
-            self.has_bom = raw.startswith(codecs.BOM_UTF8)
-            self.newline = "\r\n" if "\r\n" in content else ("\r" if "\r" in content else "\n")
-            content = content.replace("\r\n", "\n").replace("\r", "\n")
-            # Tree navigation previews the note without activating its first
-            # source line. Clicking the document restores the editing cursor.
-            if not focus_editor:
-                self.editor.dismiss_cursor()
-            self.loading = True
-            try:
-                self.load_document_source(content, markdown=path.suffix.lower() != '.txt')
-            finally:
-                self.loading = False
-            self.current_file = path.resolve()
-            self._tabs[self._active_tab]["path"] = self.current_file
-            self.mark_loaded_source_saved()
-            self.editor.moveCursor(self.editor.textCursor().MoveOperation.Start)
-            self.update_headings(reset=True)
-            self.update_title()
-            self.update_status()
-            if focus_editor:
-                self.editor.setFocus()
-            self.remember_recent_file(self.current_file)
-            # Apply final sidebar/page widths before measuring panels and prose.
-            self.centralWidget().layout().activate()
-            # Settle queued splitter/scrollbar geometry without processing
-            # input, timers, or paint events during the switch.
-            QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
-            self.editor.update_page_margins()
-            self.editor.document().documentLayout().documentSize()
+            with self.editor.batch_document_layout(), self.scratchpad_editor.batch_document_layout():
+                self.has_bom = raw.startswith(codecs.BOM_UTF8)
+                self.newline = "\r\n" if "\r\n" in content else ("\r" if "\r" in content else "\n")
+                content = content.replace("\r\n", "\n").replace("\r", "\n")
+                # Tree navigation previews the note without activating its first
+                # source line. Clicking the document restores the editing cursor.
+                if not focus_editor:
+                    self.editor.dismiss_cursor()
+                self.loading = True
+                try:
+                    self.load_document_source(content, markdown=path.suffix.lower() != '.txt')
+                finally:
+                    self.loading = False
+                self.current_file = path.resolve()
+                self._tabs[self._active_tab]["path"] = self.current_file
+                self.mark_loaded_source_saved()
+                self.editor.moveCursor(self.editor.textCursor().MoveOperation.Start)
+                self.update_headings(reset=True)
+                self.update_title()
+                self.update_status()
+                if focus_editor:
+                    self.editor.setFocus()
+                self.remember_recent_file(self.current_file)
+                # Settle sidebar/page widths without processing input, timers,
+                # or paint events. The batch then lays out at this final width.
+                self.centralWidget().layout().activate()
+                QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
+                self.editor.update_page_margins()
             self.editor.update_code_panels(full=False)
             if self.search_controls():
                 self.update_find_matches()
-            self.editor.update_scroll_range()
             self.editor.document().setModified(False)
             self.editor.document().clearUndoRedoStacks()
         finally:
