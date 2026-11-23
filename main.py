@@ -16,7 +16,7 @@ from pathlib import Path
 
 from PySide6.QtCore import (
     QAbstractAnimation, QByteArray, QCoreApplication, QEasingCurve, QEvent, QEventLoop,
-    QObject, QPoint, QRect, QRectF, QSaveFile, QSettings, Qt, QTimer, QUrl, QVariantAnimation, Signal, Slot,
+    QFile, QObject, QPoint, QRect, QRectF, QSaveFile, QSettings, Qt, QTimer, QUrl, QVariantAnimation, Signal, Slot,
 )
 from PySide6.QtDBus import QDBusConnection, QDBusInterface, QDBusMessage
 from PySide6.QtGui import (
@@ -2876,13 +2876,68 @@ class MainWindow(QMainWindow):
         self.project_tree.clicked.connect(self.open_project_item)
         self.project_tree.activated.connect(self.open_project_item)
         self.project_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.project_tree.customContextMenuRequested.connect(self.show_project_color_popup)
+        self.project_tree.customContextMenuRequested.connect(self.show_project_context_menu)
         layout.addWidget(self.project_tree, 1)
         self.apply_project_tree_font_size()
         self.update_project_root()
 
-    def show_project_color_popup(self, position):
+    def show_project_context_menu(self, position):
         index = self.project_tree.indexAt(position)
+        if not index.isValid() or self.project_model.isDir(index):
+            return
+        path = Path(self.project_model.filePath(index))
+        previous = getattr(self, '_project_context_menu', None)
+        if previous is not None:
+            previous.close()
+            previous.deleteLater()
+        menu = QMenu(self)
+        color = menu.addAction('Choose Color')
+        color.setEnabled(path.suffix.lower() in {'.md', '.markdown'})
+        color.triggered.connect(lambda: self.show_project_color_popup(position, path=path))
+        menu.addAction('Delete', lambda: self.delete_project_file(path))
+        self._project_context_menu = menu
+        menu.popup(self.project_tree.viewport().mapToGlobal(position))
+
+    def delete_project_file(self, path):
+        path = Path(path).absolute()
+        if path.is_dir():
+            return False
+        choice = QMessageBox.question(
+            self, 'Delete file',
+            f'Move {path.name} to Trash?\n\n'
+            'If this file is open, its tab will close and unsaved changes will be discarded.',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel)
+        if choice != QMessageBox.StandardButton.Yes:
+            return False
+        file = QFile(str(path))
+        if not file.moveToTrash():
+            QMessageBox.warning(self, 'Could not delete file', f'{path}\n\n{file.errorString()}')
+            return False
+        original_tab = self._tabs[self._active_tab]
+        for index in range(len(self._tabs) - 1, -1, -1):
+            if self._tabs[index].get('path') == path:
+                self.close_tab(index, focus_editor=False, confirm=False)
+        for index, tab in enumerate(self._tabs):
+            history = tab.get('history', [])
+            current = tab.get('history_index', 0)
+            tab['history_index'] = max(0, current - sum(p == path for p in history[:current]))
+            tab['history'] = [p for p in history if p != path]
+            if tab is original_tab:
+                self.activate_tab(index, focus_editor=False)
+        recent = self.settings.value('recent_files', [], type=list)
+        self.settings.setValue('recent_files', [p for p in recent if p != str(path)])
+        if self.settings.value('last_open_file', type=str) == str(path):
+            self.settings.remove('last_open_file')
+        self.update_title()
+        self.project_search.schedule_search()
+        return True
+
+    def show_project_color_popup(self, position, *, path=None):
+        if path is None:
+            index = self.project_tree.indexAt(position)
+        else:
+            index = self.project_model.index(str(path))
         if not index.isValid() or self.project_model.isDir(index):
             return
         path = Path(self.project_model.filePath(index))
@@ -4004,12 +4059,12 @@ class MainWindow(QMainWindow):
         else:
             self.editor.dismiss_cursor()
 
-    def close_tab(self, index=None, *, focus_editor=True):
+    def close_tab(self, index=None, *, focus_editor=True, confirm=True):
         # QAction.triggered supplies a bool, while QTabBar supplies an index.
         if index is None or isinstance(index, bool):
             index = self._active_tab
         self.activate_tab(index, focus_editor=focus_editor)
-        if not self.confirm_discard():
+        if confirm and not self.confirm_discard():
             return False
         self.stash_tab()
         removed = self._tabs[index]

@@ -10,7 +10,7 @@ from unittest.mock import patch
 from PySide6.QtCore import QSettings, QSize, Qt
 from PySide6.QtGui import QContextMenuEvent, QPalette, QTextCursor
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionViewItem
+from PySide6.QtWidgets import QApplication, QMessageBox, QStyle, QStyleOptionViewItem
 
 from main import MainWindow
 from project_colors import PALETTE, color_header, split_project_color
@@ -29,6 +29,7 @@ class ProjectColorTests(unittest.TestCase):
         self.path = self.root / 'note.md'
         self.original = '---\ntitle: Note\n---\n# Hello 😀\nVisible words\n'
         self.path.write_text(self.original)
+        (self.root / 'plain.txt').write_text('Plain text')
         settings = QSettings(str(self.root / 'settings.ini'), QSettings.Format.IniFormat)
         settings.setValue('project_tree_path', str(self.root))
         with patch('main.QSettings', return_value=settings):
@@ -56,6 +57,11 @@ class ProjectColorTests(unittest.TestCase):
         event = QContextMenuEvent(QContextMenuEvent.Reason.Mouse, position,
                                   viewport.mapToGlobal(position))
         QApplication.sendEvent(viewport, event)
+        menu = w._project_context_menu
+        self.assertTrue(menu.isVisible())
+        self.assertEqual([action.text() for action in menu.actions()], ['Choose Color', 'Delete'])
+        menu.close()
+        menu.actions()[0].trigger()
         popup = w._project_color_popup
         self.assertTrue(popup.isVisible())
         QTest.mouseClick(popup.swatches[5], Qt.MouseButton.LeftButton)
@@ -68,6 +74,75 @@ class ProjectColorTests(unittest.TestCase):
         w._project_color_popup.default_button.click()
         self.assertEqual(self.path.read_text(), self.original)
         self.assertIsNone(w.project_model.file_color(index))
+
+    def test_non_markdown_files_offer_delete_with_color_disabled(self):
+        w = self.window
+        path = self.root / 'plain.txt'
+        w.toggle_project_tree()
+        index = w.project_model.index(str(path))
+        w.project_tree.scrollTo(index)
+        self.app.processEvents()
+        w.show_project_context_menu(w.project_tree.visualRect(index).center())
+        actions = w._project_context_menu.actions()
+        self.assertFalse(actions[0].isEnabled())
+        self.assertTrue(actions[1].isEnabled())
+        w._project_context_menu.close()
+        with patch.object(w, 'delete_project_file') as delete:
+            actions[1].trigger()
+        delete.assert_called_once_with(path)
+
+    def test_delete_cancel_and_failure_preserve_file_and_dirty_tab(self):
+        w = self.window
+        w.editor.insertPlainText('Pending')
+        with patch('main.QMessageBox.question', return_value=QMessageBox.StandardButton.Cancel), \
+                patch('main.QFile') as trash:
+            self.assertFalse(w.delete_project_file(self.path))
+        trash.assert_not_called()
+        with patch('main.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes), \
+                patch('main.QFile') as file, \
+                patch('main.QMessageBox.warning') as warning:
+            file.return_value.moveToTrash.return_value = False
+            self.assertFalse(w.delete_project_file(self.path))
+        warning.assert_called_once()
+        self.assertTrue(self.path.exists())
+        self.assertEqual(w.current_file, self.path)
+        self.assertTrue(w.has_unsaved_changes())
+
+    def test_delete_closes_dirty_tab_and_removes_history_and_recent_entry(self):
+        w = self.window
+        w.editor.insertPlainText('Pending')
+        other = self.root / 'other.md'
+        other.write_text('Other')
+        w.open_file(other)
+        w.editor.insertPlainText('Keep these edits')
+        # This tab previously visited the file being deleted.
+        w._tabs[w._active_tab]['history'] = [self.path, other]
+        w._tabs[w._active_tab]['history_index'] = 1
+        def trash():
+            self.path.unlink()
+            return True
+        with patch('main.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes), \
+                patch('main.QFile') as file:
+            file.return_value.moveToTrash.side_effect = trash
+            self.assertTrue(w.delete_project_file(self.path))
+        self.assertFalse(self.path.exists())
+        self.assertEqual(len(w._tabs), 1)
+        self.assertEqual(w.current_file, other)
+        self.assertTrue(w.editor.toPlainText().startswith('Keep these edits'))
+        self.assertTrue(w.has_unsaved_changes())
+        self.assertEqual(w._tabs[0]['history'], [other])
+        self.assertEqual(w._tabs[0]['history_index'], 0)
+        self.assertNotIn(str(self.path), w.settings.value('recent_files', [], type=list))
+
+    def test_delete_only_open_tab_leaves_untitled_document(self):
+        w = self.window
+        with patch('main.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes), \
+                patch('main.QFile') as file:
+            file.return_value.moveToTrash.return_value = True
+            self.assertTrue(w.delete_project_file(self.path))
+        self.assertEqual(len(w._tabs), 1)
+        self.assertIsNone(w.current_file)
+        self.assertEqual(w.editor.toPlainText(), '')
 
     def test_open_dirty_document_keeps_edits_undo_and_scratch(self):
         w = self.window
