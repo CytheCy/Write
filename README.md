@@ -86,6 +86,18 @@ The folder icon at the top of the left ribbon toggles the **Project tree** panel
 
 Right-click a Markdown file in the Project tree to choose a color from the swatch palette. The color applies to both its icon and filename; **Default color** resets it. Write saves the choice inside the file as a leading `<!-- write-project-color: #528fdf -->` comment, hidden from the writing area. Color changes save immediately without saving any pending prose edits.
 
+Hover over the **Markup** ribbon icon to enable or disable categories, edit a category with its pencil icon, or choose **Add New Category**. The category window lets you name it, choose a text color from the Project Tree palette, and add watch/replacement pairs. Matches change text color in the editor; Ctrl+left-click a match to replace it. Replacements can be undone. Matching is literal with whole-word boundaries, so `woman` does not match `womanhood`; phrases are supported too. First-letter capitalization is automatic: `woman|fem` matches both `woman` and `Woman`, replacing them with `fem` and `Fem`. The remaining letters stay case-sensitive, and capitalization within the replacement is preserved. Existing explicit rules for capitalized words still take precedence over automatic variants.
+
+Categories are `.txt` files in the selected project’s `.app/markup` folder, created when the project folder is assigned. Each filename supplies its category name. For example, `Story Specific.txt` can contain:
+
+```text
+# color: #528fdf
+woman|fem
+```
+
+Files without a color line use amber until a color is chosen. Saving a category writes its color into that file. Existing category files can also be edited outside Write; changes are reloaded automatically. Markup colors are display formatting and do not alter the document’s saved text.
+
+
 Click the **Search project** magnifying glass below the Project tree icon to search text throughout that folder and its subfolders. Results show collapsible file groups, match counts, and highlighted excerpts. Click an excerpt to open and select its match; use the sort menu to reverse filename order. Search includes unsaved edits in open files, ignores case, and treats the query as literal text. Binary files, symbolic links, and `.git`/`.app` internals are skipped. Broad searches show the first 2,000 matches; refine the query to find more.
 
 The toolbar ribbon on the left displays the **Scatchpad** notepad button. Click it to toggle an editable Markdown panel on the left. Scratch notes are saved as metadata in the same Markdown file and stay out of the main document, headings, in-document search, and word count. For example, this block in a Markdown file displays only its contents, starting with `# hi`, in the Scatchpad:

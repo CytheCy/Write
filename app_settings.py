@@ -42,7 +42,7 @@ class ProjectSettings:
     @staticmethod
     def _open(root):
         directory = root / '.app'
-        directory.mkdir(parents=True, exist_ok=True)
+        (directory / 'markup').mkdir(parents=True, exist_ok=True)
         store = QSettings(str(directory / 'settings.ini'), QSettings.Format.IniFormat)
         store.setFallbacksEnabled(False)
         return store

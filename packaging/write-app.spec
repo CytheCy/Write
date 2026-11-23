@@ -34,7 +34,7 @@ offline English spell checking, a heading panel, and configurable themes.
 
 %install
 install -d %{buildroot}%{_datadir}/%{name} %{buildroot}%{_bindir}
-install -m 644 main.py app_settings.py project_colors.py project_search.py settings_ui.py themes.py spelling.py references.py reference_api.py reference_widgets.py updater.py update_helper.py VERSION write.svg WRITE-RPM-KEY.asc %{buildroot}%{_datadir}/%{name}/
+install -m 644 main.py markup.py app_settings.py project_colors.py project_search.py settings_ui.py themes.py spelling.py references.py reference_api.py reference_widgets.py updater.py update_helper.py VERSION write.svg WRITE-RPM-KEY.asc %{buildroot}%{_datadir}/%{name}/
 install -d %{buildroot}%{_datadir}/%{name}/kokoro_tts
 install -m 644 kokoro_tts/*.py kokoro_tts/runtime-requirements.txt %{buildroot}%{_datadir}/%{name}/kokoro_tts/
 install -d %{buildroot}%{_datadir}/%{name}/boxicons

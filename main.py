@@ -85,6 +85,7 @@ from updater import UpdatesDialog
 from project_search import ProjectSearchPanel
 from project_colors import (ProjectFileSystemModel, ProjectColorPopup,
                             split_project_color, color_header)
+from markup import MarkupController
 from settings_ui import SettingsDialog
 from app_settings import ProjectSettings
 from kokoro_tts.footer import KokoroFooter
@@ -796,6 +797,7 @@ class NoteEditor(QTextEdit):
         self._code_selections = []
         self._table_selections = []
         self._find_selections = []
+        self._markup_selections = []
         self.code_panels = []
         self.table_regions = []
         self._table_layouts = {}
@@ -1012,13 +1014,14 @@ class NoteEditor(QTextEdit):
         self._code_selections = []
         self._table_selections = []
         self._find_selections = []
+        self._markup_selections = []
         self._spelling_selections = []
         self.refresh_extra_selections()
 
     def refresh_extra_selections(self):
         super().setExtraSelections(
             self._code_selections + self._table_selections
-            + self._find_selections + self._spelling_selections)
+            + self._markup_selections + self._find_selections + self._spelling_selections)
 
     def extraSelections(self):  # noqa: N802 (Qt API)
         return self._spelling_selections
@@ -2745,6 +2748,14 @@ class MainWindow(QMainWindow):
         self.kokoro_footer.closed.connect(lambda: tts_button.setChecked(False))
         layout.addWidget(tts_button)
         self.ribbon_buttons["Kokoro TTS"] = tts_button
+        markup_button = BoxIconButton("highlight", self.ribbon)
+        markup_button.setFixedSize(36, 36)
+        markup_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        markup_button.setAccessibleName("Markup")
+        markup_button.setToolTip("Markup")
+        layout.addWidget(markup_button)
+        self.ribbon_buttons["Markup"] = markup_button
+        self.markup = MarkupController(self, markup_button)
         layout.addStretch(1)
         tools_button = BoxIconButton("toolbox", self.ribbon)
         tools_button.setFixedSize(36, 36)
@@ -2928,6 +2939,7 @@ class MainWindow(QMainWindow):
         self.project_tree_path = path
         self.update_project_root()
         self.project_search.set_root(path)
+        self.markup.set_root(path)
         return True
 
     def toggle_project_tree(self):
