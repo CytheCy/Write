@@ -165,8 +165,8 @@ def stylesheet(t):
         #title {{ font-size: 15px; font-weight: 600; }}
         #documentPathPopup {{ background: {t['elevated']}; border: 1px solid {t['border']}; border-radius: 5px; }}
         #documentPathPopup QToolButton {{ padding: 0; }}
-        QMenuBar {{ border-bottom: 1px solid {t['border']}; padding: 3px 6px; }}
-        QMenuBar::item {{ padding: 7px 11px; border-radius: 5px; }}
+        QMenuBar {{ border-bottom: 1px solid {t['border']}; padding: 3px 6px 3px 0; }}
+        QMenuBar::item {{ padding: 7px 10px; border-radius: 5px; }}
         QMenuBar::item:selected, QMenu::item:selected {{ background: {t['hover']}; }}
         QMenu {{ background: {t['panel']}; border: 1px solid {t['border']}; padding: 5px; }}
         QMenu::item {{ padding: 6px 24px; }}

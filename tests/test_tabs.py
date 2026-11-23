@@ -249,3 +249,67 @@ class TabTests(unittest.TestCase):
         self.assertEqual(w.current_file, self.first)
         self.assertEqual(w.tab_bar.count(), 1)
         self.assertIn('Draft', w.editor.toPlainText())
+
+    def test_history_arrows_navigate_within_tab_beneath_title(self):
+        w = self.window
+        title_bar_height = w.menuBar().height()
+        self.assertTrue(w.tab_bar.back_button.isHidden())
+        self.assertTrue(w.tab_bar.forward_button.isHidden())
+        w.open_file(self.second, replace_current=True)
+        self.app.processEvents()
+        self.assertFalse(w.tab_bar.back_button.isHidden())
+        self.assertTrue(w.tab_bar.forward_button.isHidden())
+        self.assertEqual(w.menuBar().height(), title_bar_height)
+        self.assertIs(w.tab_bar.back_button.parentWidget(), w.centralWidget())
+        back_position = w.tab_bar.back_button.mapTo(w, w.tab_bar.back_button.rect().topLeft())
+        forward_position = w.tab_bar.forward_button.pos()
+        self.assertGreater(back_position.y(), w.menuBar().geometry().bottom())
+        QTest.mouseClick(w.tab_bar.back_button, Qt.MouseButton.LeftButton)
+        self.assertEqual(w.current_file, self.first)
+        self.assertTrue(w.has_bom)
+        self.assertEqual(w.newline, '\r\n')
+        self.assertTrue(w.tab_bar.back_button.isHidden())
+        self.assertFalse(w.tab_bar.forward_button.isHidden())
+        self.assertEqual(w.tab_bar.forward_button.pos(), forward_position)
+        QTest.mouseClick(w.tab_bar.forward_button, Qt.MouseButton.LeftButton)
+        self.assertEqual(w.current_file, self.second)
+        self.assertEqual(w.tab_bar.count(), 1)
+
+    def test_history_is_independent_and_new_navigation_replaces_forward_branch(self):
+        w = self.window
+        third = self.first.with_name('third.md')
+        third.write_text('# Third')
+        w.open_file(self.second, replace_current=True)
+        w.open_file(third)
+        self.assertTrue(w.tab_bar.back_button.isHidden())
+        w.activate_tab(0)
+        w.navigate_tab_history(-1)
+        w.reload_document()
+        self.assertFalse(w.tab_bar.forward_button.isHidden())
+        fourth = self.first.with_name('fourth.md')
+        fourth.write_text('# Fourth')
+        w.open_file(fourth, replace_current=True)
+        self.assertEqual(w._tabs[0]['history'], [self.first, fourth])
+        self.assertFalse(w.navigate_tab_history(1))
+        w.activate_tab(1)
+        self.assertEqual(w.current_file, third)
+        self.assertTrue(w.tab_bar.back_button.isHidden())
+        self.assertTrue(w.tab_bar.forward_button.isHidden())
+
+    def test_history_cancel_and_missing_file_leave_position_unchanged(self):
+        w = self.window
+        w.open_file(self.second, replace_current=True)
+        w.editor.insertPlainText('Draft')
+        with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Cancel):
+            self.assertFalse(w.navigate_tab_history(-1))
+        self.assertEqual(w.current_file, self.second)
+        self.assertEqual(w._tabs[0]['history_index'], 1)
+        self.first.unlink()
+        with patch.object(QMessageBox, 'critical'):
+            self.assertFalse(w.navigate_tab_history(-1))
+        self.assertEqual(w._tabs[0]['history_index'], 1)
+        self.assertIn('Draft', w.editor.toPlainText())
+        self.first.write_text('# First again')
+        with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Save):
+            self.assertTrue(w.navigate_tab_history(-1))
+        self.assertIn('Draft', self.second.read_text())

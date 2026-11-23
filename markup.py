@@ -8,7 +8,7 @@ from PySide6.QtGui import QColor, QCursor, QIcon, QPainter, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
     QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QFormLayout,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox,
-    QPushButton, QTableWidget, QTableWidgetItem, QTextEdit, QToolButton,
+    QPushButton, QTableWidget, QTableWidgetItem, QToolButton,
     QVBoxLayout, QWidget, QWidgetAction,
 )
 from project_colors import PALETTE
@@ -51,32 +51,40 @@ def write_category(path, color, rules):
         raise OSError(output.errorString())
 
 
+class CategoryMatcher:
+    """Compile project rules once and reuse them for individual paragraphs."""
+
+    def __init__(self, categories):
+        self.values = values = {}
+        for category in categories:
+            for watch, replacement in category.rules:
+                values.setdefault(watch, (replacement, category.color))
+        # Explicit rules take priority over automatic first-letter variants.
+        for watch, value in list(values.items()):
+            for initial in (watch[0].lower(), watch[0].upper()):
+                values.setdefault(initial + watch[1:], value)
+        # Prefer a phrase over a shorter watch starting at the same position.
+        alternatives = [
+            (r'(?<!\w)' if watch[0].isalnum() or watch[0] == '_' else '')
+            + re.escape(watch)
+            + (r'(?!\w)' if watch[-1].isalnum() or watch[-1] == '_' else '')
+            for watch in sorted(values, key=len, reverse=True)
+        ]
+        self.pattern = re.compile('|'.join(alternatives)) if alternatives else None
+
+    def matches(self, text):
+        if self.pattern is None:
+            return
+        for match in self.pattern.finditer(text):
+            replacement, color = self.values[match[0]]
+            if match[0][0].isupper():
+                replacement = replacement[:1].upper() + replacement[1:]
+            yield match.start(), match.end(), replacement, color
+
+
 def category_matches(text, categories):
     """Match literal words/phrases, allowing either case of the first letter."""
-    values = {}
-    for category in categories:
-        for watch, replacement in category.rules:
-            if watch not in values:
-                values[watch] = (replacement, category.color)
-    # Keep explicit rules ahead of automatic variants, including older files
-    # that contain separate lowercase and capitalized replacements.
-    for watch, value in list(values.items()):
-        for initial in (watch[0].lower(), watch[0].upper()):
-            values.setdefault(initial + watch[1:], value)
-    if not values:
-        return
-    # Prefer a phrase over a shorter watch starting at the same position.
-    alternatives = [
-        (r'(?<!\w)' if watch[0].isalnum() or watch[0] == '_' else '')
-        + re.escape(watch)
-        + (r'(?!\w)' if watch[-1].isalnum() or watch[-1] == '_' else '')
-        for watch in sorted(values, key=len, reverse=True)
-    ]
-    for match in re.finditer('|'.join(alternatives), text):
-        replacement, color = values[match[0]]
-        if match[0][0].isupper():
-            replacement = replacement[:1].upper() + replacement[1:]
-        yield match.start(), match.end(), replacement, color
+    return CategoryMatcher(categories).matches(text)
 
 
 class CategoryDialog(QDialog):
@@ -192,7 +200,10 @@ class MarkupController(QObject):
         self.viewport = self.editor.viewport()
         self.editor.destroyed.connect(self.shutdown)
         self.categories = []
-        self.matches = []
+        self.matcher = CategoryMatcher([])
+        self.colors = {}
+        self._rule_signature = ()
+        self.editor.markup_controller = self
         self.menu = QMenu(window)
         self.menu.setObjectName('markupPopup')
         self.menu.installEventFilter(self)
@@ -201,10 +212,6 @@ class MarkupController(QObject):
         self.hover_timer.setInterval(250)
         self.hover_timer.timeout.connect(self.dismiss_after_hover)
         self.dialog = None
-        self.timer = QTimer(self)
-        self.timer.setSingleShot(True)
-        self.timer.setInterval(100)
-        self.timer.timeout.connect(self.refresh)
         self.watcher = QFileSystemWatcher(self)
         self.watcher.directoryChanged.connect(self.schedule_reload)
         self.watcher.fileChanged.connect(self.schedule_reload)
@@ -215,16 +222,12 @@ class MarkupController(QObject):
         button.installEventFilter(self)
         button.clicked.connect(self.show_popup)
         self.viewport.installEventFilter(self)
-        self.editor.sourceChanged.connect(self.source_changed)
-        self.editor.documentAboutToChange.connect(self.clear)
         self.set_root(window.project_tree_path)
 
     def shutdown(self):
         self.hover_timer.stop()
-        self.timer.stop()
         self.reload_timer.stop()
         self.watcher.blockSignals(True)
-        self.matches = []
 
     def set_root(self, root):
         self.menu.close()
@@ -333,43 +336,45 @@ class MarkupController(QObject):
         dialog.deleteLater()
         self.reload()
 
-    def clear(self):
-        self.timer.stop()
-        self.matches = []
-        if self.editor._markup_selections:
-            self.editor._markup_selections = []
-            self.editor.refresh_extra_selections()
-
-    def source_changed(self):
-        self.clear()
-        if any(self.enabled(c) and c.rules for c in self.categories):
-            self.timer.start()
-
     def refresh(self):
-        self.timer.stop()
+        """Rebuild and repaint only when the enabled rules actually change."""
         active = [c for c in self.categories if self.enabled(c) and c.rules]
-        if not active:
-            self.clear()
+        signature = tuple((c.color, tuple(c.rules)) for c in active)
+        if signature == self._rule_signature:
             return
-        text = self.editor.toPlainText()
-        # QTextCursor counts UTF-16 code units, including two for astral characters.
-        offsets, position = [0], 0
-        if any(c.rules for c in active):
+        self._rule_signature = signature
+        self.matcher = CategoryMatcher(active)
+        self.colors = {c.color: QColor(c.color) for c in active}
+        highlighter = getattr(self.editor, 'highlighter', None)
+        if highlighter is not None:
+            document = self.editor.document()
+            was_modified = document.isModified()
+            highlighter.rehighlight()
+            document.setModified(was_modified)
+
+    def highlight_block(self, highlighter, text):
+        """Merge foregrounds into syntax formats without retaining live cursors."""
+        if self.matcher.pattern is None:
+            return
+        offsets = None
+        if not highlighter.block_is_bmp:
+            offsets, position = [0], 0
             for char in text:
                 position += 2 if ord(char) > 0xffff else 1
                 offsets.append(position)
-        selections, self.matches = [], []
-        for start, end, replacement, color in category_matches(text, active):
-            cursor = QTextCursor(self.editor.document())
-            cursor.setPosition(offsets[start])
-            cursor.setPosition(offsets[end], QTextCursor.MoveMode.KeepAnchor)
-            selection = QTextEdit.ExtraSelection()
-            selection.cursor = cursor
-            selection.format.setForeground(QColor(color))
-            selections.append(selection)
-            self.matches.append((cursor, replacement))
-        self.editor._markup_selections = selections
-        self.editor.refresh_extra_selections()
+        for start, end, _, color in self.matcher.matches(text):
+            if offsets is not None:
+                start, end = offsets[start], offsets[end]
+            while start < end:
+                style = highlighter.format(start)
+                limit = start + 1
+                while limit < end and highlighter.format(limit) == style:
+                    limit += 1
+                # Keep collapsed Markdown markers and table source invisible.
+                if style.foreground().color().alpha():
+                    style.setForeground(self.colors[color])
+                    highlighter.setFormat(start, limit - start, style)
+                start = limit
 
     def eventFilter(self, watched, event):  # noqa: N802
         if watched is self.button and event.type() == QEvent.Type.Enter:
@@ -380,8 +385,6 @@ class MarkupController(QObject):
         elif (watched is self.viewport and event.type() == QEvent.Type.MouseButtonPress
               and event.button() == Qt.MouseButton.LeftButton
               and event.modifiers() & Qt.KeyboardModifier.ControlModifier):
-            if self.timer.isActive():
-                self.refresh()
             point = event.position().toPoint()
             hit = self.editor.cursorForPosition(point)
             rect = self.editor.cursorRect(hit)
@@ -397,10 +400,16 @@ class MarkupController(QObject):
                      start_rect.left() + self.editor.fontMetrics().horizontalAdvance(character.selectedText()))
             if not start_rect.left() <= point.x() < right:
                 return False
-            position = hit.position()
-            for cursor, replacement in self.matches:
-                if cursor.selectionStart() <= position < cursor.selectionEnd():
-                    cursor = QTextCursor(cursor)
+            block = hit.block()
+            text = block.text()
+            position = hit.positionInBlock()
+            for start, end, replacement, _ in self.matcher.matches(text):
+                start = len(text[:start].encode('utf-16-le')) // 2
+                end = len(text[:end].encode('utf-16-le')) // 2
+                if start <= position < end:
+                    cursor = QTextCursor(block)
+                    cursor.setPosition(block.position() + start)
+                    cursor.setPosition(block.position() + end, QTextCursor.MoveMode.KeepAnchor)
                     cursor.beginEditBlock()
                     cursor.insertText(replacement)
                     cursor.endEditBlock()

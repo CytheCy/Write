@@ -522,13 +522,19 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.update_colors(theme)
 
     def rehighlight(self):
-        super().rehighlight()
-        # A full highlight can clear offscreen block layouts without Qt
-        # invalidating their cached heights. Reflow the whole document so
-        # later paragraphs retain their height and remain scrollable.
         document = self.document()
-        if document is not None:
-            document.markContentsDirty(0, document.characterCount())
+        layout_enabled = document is not None and document.isLayoutEnabled()
+        if layout_enabled:
+            document.setLayoutEnabled(False)
+        try:
+            super().rehighlight()
+            # Refresh cached offscreen heights, then lay out the document once.
+            # Laying it out after each colored paragraph makes a full pass costly.
+            if document is not None:
+                document.markContentsDirty(0, document.characterCount())
+        finally:
+            if layout_enabled:
+                document.setLayoutEnabled(True)
 
     def update_active_block(self):
         if self.document() is None or (self.editor and self.editor._loading_document):
@@ -612,6 +618,9 @@ class MarkdownHighlighter(QSyntaxHighlighter):
     def highlightBlock(self, text: str):  # noqa: N802 (Qt API)
         self.highlight_source_block(text)
         if self.editor is not None:
+            markup = getattr(self.editor, 'markup_controller', None)
+            if markup is not None:
+                markup.highlight_block(self, text)
             cache = self.editor.block_data(self.currentBlock())
             # Heading navigation uses exactly the heading recognition performed
             # for display, including the incoming fenced-code context.
@@ -797,7 +806,6 @@ class NoteEditor(QTextEdit):
         self._code_selections = []
         self._table_selections = []
         self._find_selections = []
-        self._markup_selections = []
         self.code_panels = []
         self.table_regions = []
         self._table_layouts = {}
@@ -1014,14 +1022,13 @@ class NoteEditor(QTextEdit):
         self._code_selections = []
         self._table_selections = []
         self._find_selections = []
-        self._markup_selections = []
         self._spelling_selections = []
         self.refresh_extra_selections()
 
     def refresh_extra_selections(self):
         super().setExtraSelections(
             self._code_selections + self._table_selections
-            + self._markup_selections + self._find_selections + self._spelling_selections)
+            + self._find_selections + self._spelling_selections)
 
     def extraSelections(self):  # noqa: N802 (Qt API)
         return self._spelling_selections
@@ -1751,15 +1758,46 @@ class BoxIconButton(QToolButton):
         color = (theme['disabled'] if not self.isEnabled() else
                  theme['window'] if self.objectName() == "closeControl" and self.underMouse() else
                  theme['text'])
-        if self.icon_name == "sidebar":
+        if self.icon_name in ("sidebar", "left-arrow-alt"):
             painter.translate(self.width(), 0)
             painter.scale(-1, 1)
-        boxicon(self.icon_name, color).render(
+        icon_name = "right-arrow-alt" if self.icon_name == "left-arrow-alt" else self.icon_name
+        boxicon(icon_name, color).render(
             painter, QRectF((self.width() - 18) / 2, (self.height() - 18) / 2, 18, 18))
 
 
 class DocumentTabBar(QTabBar):
     """Draw document tabs that flow into the surface below the title row."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Keep navigation below the title bar without increasing its height.
+        navigation_parent = self.window().centralWidget()
+        self.back_button = BoxIconButton("left-arrow-alt", navigation_parent)
+        self.forward_button = BoxIconButton("right-arrow-alt", navigation_parent)
+        for button, label, step in (
+                (self.back_button, "Previous file in this tab", -1),
+                (self.forward_button, "Next file in this tab", 1)):
+            button.setObjectName("tabCloseButton")
+            button.setFixedSize(26, 20)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setAccessibleName(label)
+            button.setToolTip(label)
+            button.clicked.connect(lambda checked=False, delta=step: self.window().navigate_tab_history(delta))
+            button.hide()
+
+    def position_navigation(self):
+        index = self.currentIndex()
+        if index < 0:
+            return
+        rect = self.tabRect(index)
+        parent = self.back_button.parentWidget()
+        x = parent.mapFromGlobal(self.mapToGlobal(QPoint(rect.left() + 18, 0))).x()
+        for button in (self.back_button, self.forward_button):
+            button.move(x, 2)
+            x += button.width()
+            button.raise_()
 
     def tabInserted(self, index):  # noqa: N802
         super().tabInserted(index)
@@ -1779,6 +1817,7 @@ class DocumentTabBar(QTabBar):
                 return
 
     def paintEvent(self, event):  # noqa: N802
+        self.position_navigation()
         theme = self.window().theme
         painter = QStylePainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -3998,9 +4037,26 @@ class MainWindow(QMainWindow):
         self.activate_tab(original)
         return True
 
-    def open_file(self, path: Path, *, focus_editor=True, reload=False, replace_current=False):
+    def navigate_tab_history(self, step):
+        tab = self._tabs[self._active_tab]
+        history = tab.get('history', [])
+        index = tab.get('history_index', 0) + step
+        if not 0 <= index < len(history):
+            return False
+        return self.open_file(history[index], replace_current=True, _history_index=index)
+
+    def update_tab_navigation(self):
+        tab = self._tabs[self._active_tab]
+        history = tab.get('history', [])
+        index = tab.get('history_index', 0)
+        self.tab_bar.back_button.setVisible(index > 0)
+        self.tab_bar.forward_button.setVisible(index + 1 < len(history))
+        self.tab_bar.position_navigation()
+
+    def open_file(self, path: Path, *, focus_editor=True, reload=False, replace_current=False,
+                  _history_index=None):
         path = path.resolve()
-        if not reload:
+        if not reload and _history_index is None:
             for index, tab in enumerate(self._tabs):
                 if tab.get('path') == path:
                     if replace_current and index != self._active_tab:
@@ -4010,7 +4066,7 @@ class MainWindow(QMainWindow):
                                      if tab.get('path') == path)
                     self.activate_tab(index, focus_editor=focus_editor)
                     return True
-        elif not self.confirm_discard():
+        elif reload and not self.confirm_discard():
             return False
         try:
             raw = path.read_bytes()
@@ -4051,7 +4107,15 @@ class MainWindow(QMainWindow):
                 finally:
                     self.loading = False
                 self.current_file = path.resolve()
-                self._tabs[self._active_tab]["path"] = self.current_file
+                tab = self._tabs[self._active_tab]
+                tab["path"] = self.current_file
+                if _history_index is not None:
+                    tab['history_index'] = _history_index
+                elif not reload:
+                    history = tab.setdefault('history', [])
+                    index = tab.get('history_index', len(history) - 1)
+                    tab['history'] = history[:index + 1] + [self.current_file]
+                    tab['history_index'] = len(tab['history']) - 1
                 self.mark_loaded_source_saved()
                 self.editor.moveCursor(self.editor.textCursor().MoveOperation.Start)
                 self.update_headings(reset=True)
@@ -4361,8 +4425,15 @@ class MainWindow(QMainWindow):
         title = name + ("*" if dirty else "")
         if self._active_tab >= 0:
             self._tabs[self._active_tab]['path'] = self.current_file
+            tab = self._tabs[self._active_tab]
+            if tab.get('history'):
+                tab['history'][tab['history_index']] = self.current_file
+            elif self.current_file is not None:
+                tab['history'] = [self.current_file]
+                tab['history_index'] = 0
             self.tab_bar.setTabText(self._active_tab, title.replace('&', '&&'))
             self.tab_bar.setTabToolTip(self._active_tab, str(self.current_file) if self.current_file else "Not saved yet")
+            self.update_tab_navigation()
         self.document_path_popup.refresh_path()
         self.menuBar().position_title()
         self.setWindowTitle(("*" if dirty else "") + name + " — " + APP_NAME)
