@@ -2400,8 +2400,13 @@ class MainWindow(QMainWindow):
         status.setObjectName("status")
         status_layout = QHBoxLayout(status)
         status_layout.setContentsMargins(18, 6, 18, 6)
+        self.tts_minutes_label = QLabel("TTS Minutes: 0.0")
+        self.tts_minutes_label.setToolTip(
+            "Estimated audio duration at 150 words per minute (ElevenLabs average).")
         self.count_label = QLabel("0 words")
         status_layout.addStretch(1)
+        status_layout.addWidget(self.tts_minutes_label)
+        status_layout.addSpacing(16)
         status_layout.addWidget(self.count_label)
         root_layout.addWidget(status)
 
@@ -4523,6 +4528,7 @@ class MainWindow(QMainWindow):
     def update_status(self):
         self.update_headings()
         count = self.editor.source_stats.word_count
+        self.tts_minutes_label.setText(f"TTS Minutes: {count / 150:.1f}")
         self.count_label.setText(f"{count} word{'s' if count != 1 else ''}")
 
     def closeEvent(self, event):  # noqa: N802

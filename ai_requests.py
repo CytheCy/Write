@@ -20,6 +20,7 @@ DEFAULT_ENDPOINT = 'https://api.openai.com/v1/chat/completions'
 ATTACHMENT_FILTER = ('Supporting files (*.txt *.md *.markdown *.csv *.json *.html *.xml '
                      '*.docx *.pdf *.png *.jpg *.jpeg *.webp);;All files (*)')
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+REQUEST_ATTACHMENTS_ROLE = Qt.ItemDataRole.UserRole + 1
 
 
 def build_payload(model, prompt, selection, paths):
@@ -79,11 +80,57 @@ def response_text(data):
         raise ValueError('The AI returned an unexpected response format.') from None
 
 
+class AttachmentPicker(QWidget):
+    def __init__(self, parent=None, paths=()):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.attachments = QListWidget()
+        self.attachments.setAccessibleName('AI attachments')
+        self.attachments.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.attachments.setMaximumHeight(90)
+        layout.addWidget(self.attachments)
+        row = QHBoxLayout()
+        attach = QPushButton('Add files…')
+        attach.clicked.connect(self.add_attachments)
+        row.addWidget(attach)
+        self.remove = QPushButton('Remove')
+        self.remove.setEnabled(False)
+        self.remove.clicked.connect(self.remove_attachments)
+        self.attachments.itemSelectionChanged.connect(
+            lambda: self.remove.setEnabled(bool(self.attachments.selectedItems())))
+        row.addWidget(self.remove)
+        layout.addLayout(row)
+        self.add_paths(paths)
+
+    def paths(self):
+        return [self.attachments.item(i).data(Qt.ItemDataRole.UserRole)
+                for i in range(self.attachments.count())]
+
+    def add_paths(self, paths):
+        existing = set(self.paths())
+        for path in paths:
+            if path not in existing:
+                item = QListWidgetItem(Path(path).name)
+                item.setToolTip(path)
+                item.setData(Qt.ItemDataRole.UserRole, path)
+                self.attachments.addItem(item)
+                existing.add(path)
+
+    def add_attachments(self):
+        paths, _ = QFileDialog.getOpenFileNames(self, 'Add AI attachments', '', ATTACHMENT_FILTER)
+        self.add_paths(paths)
+
+    def remove_attachments(self):
+        for item in self.attachments.selectedItems():
+            self.attachments.takeItem(self.attachments.row(item))
+
+
 class RequestDialog(QDialog):
-    def __init__(self, parent, name='', prompt=''):
+    def __init__(self, parent, name='', prompt='', attachments=()):
         super().__init__(parent)
         self.setWindowTitle('AI request')
-        self.resize(520, 400)
+        self.resize(520, 520)
         layout = QVBoxLayout(self)
         form = QFormLayout()
         self.name = QLineEdit(name)
@@ -97,6 +144,9 @@ class RequestDialog(QDialog):
         self.prompt.setAccessibleName('Request prompt')
         self.prompt.setPlaceholderText('Describe what the AI should do to the selected text…')
         layout.addWidget(self.prompt)
+        layout.addWidget(QLabel('Attachments · optional supporting content'))
+        self.attachment_picker = AttachmentPicker(self, attachments)
+        layout.addWidget(self.attachment_picker)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         self.save = buttons.button(QDialogButtonBox.StandardButton.Save)
         self.name.textChanged.connect(self.validate)
@@ -160,20 +210,10 @@ class AIPanel(QWidget):
         capture = QPushButton('Use current selection')
         capture.clicked.connect(self.capture_selection)
         layout.addWidget(capture)
-        layout.addWidget(QLabel('Attachments · optional supporting content'))
-        self.attachments = QListWidget()
-        self.attachments.setAccessibleName('AI attachments')
-        self.attachments.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.attachments.setMaximumHeight(75)
-        layout.addWidget(self.attachments)
-        row = QHBoxLayout()
-        attach = QPushButton('Add files…')
-        attach.clicked.connect(self.add_attachments)
-        row.addWidget(attach)
-        remove = QPushButton('Remove')
-        remove.clicked.connect(self.remove_attachments)
-        row.addWidget(remove)
-        layout.addLayout(row)
+        layout.addWidget(QLabel('Additional attachments · this session'))
+        self.attachment_picker = AttachmentPicker(self)
+        self.attachments = self.attachment_picker.attachments
+        layout.addWidget(self.attachment_picker)
         layout.addWidget(QLabel('Result'))
         self.output = QTextEdit()
         self.output.setAcceptRichText(False)
@@ -205,25 +245,32 @@ class AIPanel(QWidget):
         for request in saved:
             if (isinstance(request, dict) and isinstance(request.get('name'), str)
                     and isinstance(request.get('prompt'), str)):
-                self.insert_request(request['name'], request['prompt'])
+                paths = request.get('attachments', [])
+                if not isinstance(paths, list):
+                    paths = []
+                self.insert_request(request['name'], request['prompt'],
+                                    [path for path in paths if isinstance(path, str) and path])
 
-    def insert_request(self, name, prompt):
+    def insert_request(self, name, prompt, attachments=()):
         item = QListWidgetItem(name)
         item.setData(Qt.ItemDataRole.UserRole, prompt)
+        item.setData(REQUEST_ATTACHMENTS_ROLE, list(attachments))
         item.setToolTip(prompt)
         self.requests.addItem(item)
 
     def save_requests(self):
         self.settings.setValue('ai/requests', json.dumps([
             {'name': self.requests.item(i).text(),
-             'prompt': self.requests.item(i).data(Qt.ItemDataRole.UserRole)}
+             'prompt': self.requests.item(i).data(Qt.ItemDataRole.UserRole),
+             'attachments': self.requests.item(i).data(REQUEST_ATTACHMENTS_ROLE) or []}
             for i in range(self.requests.count())]))
         self.settings.sync()
 
     def add_request(self):
         dialog = RequestDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.insert_request(dialog.name.text().strip(), dialog.prompt.toPlainText().strip())
+            self.insert_request(dialog.name.text().strip(), dialog.prompt.toPlainText().strip(),
+                                dialog.attachment_picker.paths())
             self.save_requests()
 
     def edit_request(self):
@@ -231,10 +278,12 @@ class AIPanel(QWidget):
         if item is None:
             self.status.setText('Choose a request to edit.')
             return
-        dialog = RequestDialog(self, item.text(), item.data(Qt.ItemDataRole.UserRole))
+        dialog = RequestDialog(self, item.text(), item.data(Qt.ItemDataRole.UserRole),
+                               item.data(REQUEST_ATTACHMENTS_ROLE) or [])
         if dialog.exec() == QDialog.DialogCode.Accepted:
             item.setText(dialog.name.text().strip())
             item.setData(Qt.ItemDataRole.UserRole, dialog.prompt.toPlainText().strip())
+            item.setData(REQUEST_ATTACHMENTS_ROLE, dialog.attachment_picker.paths())
             item.setToolTip(dialog.prompt.toPlainText().strip())
             self.save_requests()
 
@@ -249,20 +298,10 @@ class AIPanel(QWidget):
                                      'Select text in the document, then click Use current selection.')
 
     def add_attachments(self):
-        paths, _ = QFileDialog.getOpenFileNames(self, 'Add AI attachments', '', ATTACHMENT_FILTER)
-        existing = {self.attachments.item(i).data(Qt.ItemDataRole.UserRole)
-                    for i in range(self.attachments.count())}
-        for path in paths:
-            if path not in existing:
-                item = QListWidgetItem(Path(path).name())
-                item.setToolTip(path)
-                item.setData(Qt.ItemDataRole.UserRole, path)
-                self.attachments.addItem(item)
-                existing.add(path)
+        self.attachment_picker.add_attachments()
 
     def remove_attachments(self):
-        for item in self.attachments.selectedItems():
-            self.attachments.takeItem(self.attachments.row(item))
+        self.attachment_picker.remove_attachments()
 
     def valid_target(self, cursor, text):
         return (cursor is not None and isValid(cursor.document())
@@ -292,10 +331,11 @@ class AIPanel(QWidget):
                     or parsed.scheme not in ('https', 'http')
                     or (parsed.scheme == 'http' and parsed.hostname not in ('localhost', '127.0.0.1', '::1'))):
                 raise ValueError('Use an HTTPS endpoint (HTTP is allowed for localhost).')
+            paths = list(dict.fromkeys((item.data(REQUEST_ATTACHMENTS_ROLE) or [])
+                                       + self.attachment_picker.paths()))
             payload = build_payload(model, item.data(Qt.ItemDataRole.UserRole),
                                     self.selected_text.replace('\u2029', '\n'),
-                                    [self.attachments.item(i).data(Qt.ItemDataRole.UserRole)
-                                     for i in range(self.attachments.count())])
+                                    paths)
         except Exception as error:
             self.status.setText(str(error))
             return

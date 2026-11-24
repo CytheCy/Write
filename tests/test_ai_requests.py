@@ -13,9 +13,10 @@ from unittest.mock import patch
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QTextCursor
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QListWidgetItem
+from PySide6.QtWidgets import QApplication, QDialog, QListWidgetItem, QPushButton
 
-from ai_requests import AIPanel, RequestDialog, build_payload, response_text
+from ai_requests import (AIPanel, RequestDialog, REQUEST_ATTACHMENTS_ROLE,
+                         build_payload, response_text)
 from main import BoxIconButton, MainWindow
 
 
@@ -253,6 +254,90 @@ class AITests(unittest.TestCase):
         settings.ai_model.editingFinished.emit()
         self.assertEqual(self.window.settings.value('ai/model'), 'another-model')
         settings.close()
+
+    def test_add_and_edit_request_attachments_survive_recreation(self):
+        first = str(Path(self.temp.name) / 'first.txt')
+        second = str(Path(self.temp.name) / 'second.txt')
+        Path(first).write_text('First')
+        Path(second).write_text('Second')
+
+        def create(dialog):
+            dialog.name.setText('With files')
+            dialog.prompt.setPlainText('Use these files')
+            picker = dialog.attachment_picker
+            with patch('ai_requests.QFileDialog.getOpenFileNames',
+                       return_value=([first, second, first], '')):
+                next(button for button in picker.findChildren(QPushButton)
+                     if button.text() == 'Add files…').click()
+            self.assertEqual(picker.paths(), [first, second])
+            self.assertEqual(picker.attachments.item(0).toolTip(), first)
+            return QDialog.DialogCode.Accepted
+
+        with patch.object(RequestDialog, 'exec', new=create):
+            self.panel.add_request()
+        self.panel.requests.setCurrentRow(1)
+
+        def edit(dialog):
+            picker = dialog.attachment_picker
+            self.assertEqual(picker.paths(), [first, second])
+            self.assertFalse(picker.remove.isEnabled())
+            picker.attachments.item(0).setSelected(True)
+            picker.attachments.item(1).setSelected(True)
+            picker.remove.click()
+            self.assertEqual(picker.paths(), [])
+            picker.add_paths([second])
+            return QDialog.DialogCode.Accepted
+
+        with patch.object(RequestDialog, 'exec', new=edit):
+            self.panel.edit_request()
+        other = AIPanel(self.window, BoxIconButton)
+        self.addCleanup(other.deleteLater)
+        self.assertEqual(other.requests.item(1).data(REQUEST_ATTACHMENTS_ROLE), [second])
+        self.assertTrue(Path(first).is_file())
+        self.assertTrue(Path(second).is_file())
+
+    def test_cancelling_attachment_edits_preserves_saved_request(self):
+        paths = [str(Path(self.temp.name) / 'facts.txt')]
+        self.panel.insert_request('Files', 'Use facts', paths)
+        self.panel.requests.setCurrentRow(1)
+        self.panel.save_requests()
+        saved = self.window.settings.value('ai/requests')
+
+        def cancel(dialog):
+            dialog.attachment_picker.attachments.selectAll()
+            dialog.attachment_picker.remove.click()
+            return QDialog.DialogCode.Rejected
+
+        with patch.object(RequestDialog, 'exec', new=cancel):
+            self.panel.edit_request()
+        self.assertEqual(self.panel.requests.item(1).data(REQUEST_ATTACHMENTS_ROLE), paths)
+        self.assertEqual(self.window.settings.value('ai/requests'), saved)
+
+    def test_only_clicked_requests_attachments_are_sent(self):
+        received = self.serve()
+        path = str(Path(self.temp.name) / 'facts.txt')
+        Path(path).write_text('Saved supporting facts')
+        self.panel.insert_request('With files', 'Use facts', [path])
+        # Duplicate session attachments should only be sent once.
+        self.panel.attachment_picker.add_paths([path])
+        self.panel.run_request(self.panel.requests.item(1))
+        self.finish()
+        parts = received[0][2]['messages'][1]['content']
+        self.assertEqual(len(parts), 2)
+        self.assertIn('Saved supporting facts', parts[1]['text'])
+        self.panel.attachments.clear()
+        self.panel.run_request(self.panel.requests.item(0))
+        self.finish()
+        self.assertIsInstance(received[1][2]['messages'][1]['content'], str)
+
+    def test_legacy_requests_load_without_attachments(self):
+        self.window.settings.setValue('ai/requests', json.dumps([
+            {'name': 'Legacy', 'prompt': 'Rewrite'},
+            {'name': 'Malformed files', 'prompt': 'Rewrite', 'attachments': [None, 3, '']},
+        ]))
+        self.panel.load_requests()
+        for i in range(2):
+            self.assertEqual(self.panel.requests.item(i).data(REQUEST_ATTACHMENTS_ROLE), [])
 
     def test_request_dialog_requires_name_and_prompt(self):
         dialog = RequestDialog(self.panel)
