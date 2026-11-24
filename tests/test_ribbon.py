@@ -50,7 +50,7 @@ class RibbonTests(unittest.TestCase):
         self.assertTrue(w.ribbon.isVisible())
         self.assertLess(w.ribbon.mapTo(w, QPoint()).x(), w.editor.mapTo(w, QPoint()).x())
         buttons = w.ribbon.findChildren(QToolButton)
-        self.assertEqual(len(buttons), 10)
+        self.assertEqual(len(buttons), 11)
         self.assertEqual(buttons[0].icon_name, 'folder-tree')
         self.assertEqual(buttons[0].accessibleName(), 'Project Tree')
         self.assertEqual(buttons[1].icon_name, 'search')
@@ -72,12 +72,14 @@ class RibbonTests(unittest.TestCase):
         self.assertEqual(buttons[6].accessibleName(), 'Kokoro TTS')
         self.assertEqual(buttons[7].icon_name, 'highlight')
         self.assertEqual(buttons[7].accessibleName(), 'Markup')
-        self.assertEqual(buttons[8].icon_name, 'toolbox')
-        self.assertEqual(buttons[8].accessibleName(), 'Tools')
-        self.assertEqual(buttons[9].icon_name, 'cog')
-        self.assertEqual(buttons[9].accessibleName(), 'Settings')
-        self.assertEqual(buttons[9].y() - buttons[8].geometry().bottom() - 1, 6)
-        self.assertEqual(w.ribbon.height() - buttons[9].geometry().bottom() - 1, 10)
+        self.assertEqual(buttons[8].icon_name, 'ai')
+        self.assertEqual(buttons[8].accessibleName(), 'AI')
+        self.assertEqual(buttons[9].icon_name, 'toolbox')
+        self.assertEqual(buttons[9].accessibleName(), 'Tools')
+        self.assertEqual(buttons[10].icon_name, 'cog')
+        self.assertEqual(buttons[10].accessibleName(), 'Settings')
+        self.assertEqual(buttons[10].y() - buttons[9].geometry().bottom() - 1, 6)
+        self.assertEqual(w.ribbon.height() - buttons[10].geometry().bottom() - 1, 10)
 
     def test_tools_icon_opens_editing_menu(self):
         w = self.window
@@ -112,7 +114,7 @@ class RibbonTests(unittest.TestCase):
         dialog = w.settings_dialog
         self.assertTrue(dialog.isVisible())
         self.assertEqual([dialog.tabs.tabText(i) for i in range(dialog.tabs.count())],
-                         ['Themes', 'Appearance', 'Shortcut Keys', 'Updates', 'General'])
+                         ['Themes', 'Appearance', 'Shortcut Keys', 'Updates', 'General', 'AI'])
         w.show_settings()
         self.assertIs(w.settings_dialog, dialog)
         table = dialog.findChild(QTableWidget, 'settingsShortcuts')

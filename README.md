@@ -118,11 +118,19 @@ Click the **Dictionary** (A–Z), **Thesaurus**, or **Moby Thesaurus** (whale) r
 
 Hover over a word in the document and press **Ctrl+L** to open Dictionary and search for that word. Your text selection and caret stay in place. Hovering over empty space does nothing.
 
+Select a passage in the document and click the **AI** sparkle icon in the ribbon to open the AI requests panel. Click **+** to create a named request with a prompt describing what the AI should do. Requests are saved with your project settings; select a request and use **Edit request…** to revise it. Add supporting files with **Add files…**, then click a request at the top to run it. The prompt supplies the instructions, the selected document text is the target, and attachments supply supporting content. Use **Use current selection** to capture a different passage.
+
+Before running a request, open **Settings → AI**, choose a text file containing only your API key, enter the model name from your AI service, and set its Chat Completions endpoint. The default endpoint is `https://api.openai.com/v1/chat/completions`; other services must support the same request/response format ([API reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)). HTTPS is required except for local services. Only the key file path is saved in project settings, and the key is read when sending a request.
+
+Attachments support UTF-8 text, Markdown, CSV, JSON, HTML, XML, DOCX, PDF, PNG, JPEG, and WebP, up to 20 MB total. Your model must support PDF or image inputs to use those formats. Clicking a request sends the prompt, selection, and attachments to the configured service. **Cancel request** stops waiting for a response; requests also time out after two minutes.
+
+The answer appears in the panel's editable **Result** window. Click **Paste above selected** to insert it immediately before the original passage, separated by a blank line. The passage stays intact, and the insertion can be undone in one step. If you have switched documents or changed the original passage, return to the original document or run a new request before inserting. Attachments and results are kept for the current session only.
+
 Click the **Tools** icon above Settings for **Find** (**Ctrl+F**), **Replace** (**Ctrl+R**), **Insert Template**, **Reload Document**, and the text cleanup commands.
 
 Use **Tools → Insert Template** to choose a file from `.app/templates` in your Project folder. Click **Insert** or double-click a filename to insert its UTF-8 text at the cursor in the active document, replacing any selected text. Undo restores the previous text in one step.
 
-Click the **Settings** gear at the bottom of the left ribbon to open a settings window with **Themes**, **Appearance**, **Shortcut Keys**, **Updates**, and **General** tabs. Appearance includes font size, paragraph spacing, page width, and panel visibility. Shortcut Keys lists the available keyboard shortcuts.
+Click the **Settings** gear at the bottom of the left ribbon to open a settings window with **Themes**, **Appearance**, **Shortcut Keys**, **Updates**, **General**, and **AI** tabs. Appearance includes font size, paragraph spacing, page width, and panel visibility. Shortcut Keys lists the available keyboard shortcuts.
 
 Open **Settings → General** to select the `.txt` files containing your Merriam-Webster Collegiate Dictionary and Thesaurus keys directly on the tab. Each file selector shows the saved location and whether the file exists. You can also use **API key files…** in a reference panel. Both locations are saved in the project's `.app/settings.ini` as `keys/dictionary_path` and `keys/thesaurus_path` (empty until selected), and follow your settings when changing the project tree folder. Only file paths are saved; keys are read when searching. Lookups require an internet connection. Switching back to Scatchpad preserves your scratch notes.
 

@@ -53,11 +53,11 @@ class ReferencePanel(QWidget):
 
 
 class KeyPathRow(QWidget):
-    def __init__(self, name, setting_key, settings):
+    def __init__(self, name, setting_key, settings, *, label=None):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(QLabel(f'Merriam-Webster Collegiate {name} key file'))
+        layout.addWidget(QLabel(label or f'Merriam-Webster Collegiate {name} key file'))
         row = QHBoxLayout()
         self.path = QLineEdit(str(settings.value(setting_key, '')))
         self.path.setAccessibleName(f'{name} API key file')
@@ -86,7 +86,7 @@ class KeyPathRow(QWidget):
     def update_status(self):
         value = self.path.text()
         self.status.setText('No file selected' if not value else (
-            'File found • the key will be read when you search' if Path(value).is_file()
+            'File found • the key will be read when needed' if Path(value).is_file()
             else 'File not found • choose a new location'))
 
 

@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 
 from updater import UpdatesPanel
 from references import KeyPathRow, SOURCES
+from ai_requests import DEFAULT_ENDPOINT
 
 
 class SettingsDialog(QDialog):
@@ -37,6 +38,7 @@ class SettingsDialog(QDialog):
         self.updates.close_requested.connect(self.close)
         self.tabs.addTab(self.updates, 'Updates')
         self.tabs.addTab(self.general_panel(), 'General')
+        self.tabs.addTab(self.ai_panel(), 'AI')
 
         hint = QLabel('Changes apply immediately and are saved automatically.')
         hint.setWordWrap(True)
@@ -170,6 +172,37 @@ class SettingsDialog(QDialog):
         for name, (_, setting_key, _) in SOURCES.items():
             if setting_key:
                 layout.addWidget(KeyPathRow(name, setting_key, window.settings))
+        layout.addStretch(1)
+        return panel
+
+    def ai_panel(self):
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        hint = QLabel('Choose your AI service using its model and Chat Completions endpoint. '
+                      'The API key file should be a text file containing only your API key. '
+                      'Clicking a saved request sends the selected text and attachments to this service.')
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+        form = QFormLayout()
+        self.ai_endpoint = QLineEdit(self.editor_window.settings.value(
+            'ai/endpoint', DEFAULT_ENDPOINT, type=str))
+        self.ai_endpoint.setAccessibleName('AI endpoint')
+        self.ai_endpoint.editingFinished.connect(lambda: self.editor_window.settings.setValue(
+            'ai/endpoint', self.ai_endpoint.text().strip()))
+        form.addRow('Endpoint:', self.ai_endpoint)
+        self.ai_model = QLineEdit(self.editor_window.settings.value('ai/model', '', type=str))
+        self.ai_model.setAccessibleName('AI model')
+        self.ai_model.setPlaceholderText('Model name supplied by your AI service')
+        self.ai_model.editingFinished.connect(lambda: self.editor_window.settings.setValue(
+            'ai/model', self.ai_model.text().strip()))
+        form.addRow('Model:', self.ai_model)
+        layout.addLayout(form)
+        layout.addWidget(KeyPathRow('AI', 'ai/key_file', self.editor_window.settings, label='AI API key file'))
+        note = QLabel('Attachments: UTF-8 text, Markdown, CSV, JSON, DOCX, PDF, PNG, JPEG, '
+                      'or WebP; up to 20 MB total. PDF and image support depends on your AI model. '
+                      'Saved requests and the key file path are stored with project settings.')
+        note.setWordWrap(True)
+        layout.addWidget(note)
         layout.addStretch(1)
         return panel
 

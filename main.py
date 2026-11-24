@@ -88,6 +88,7 @@ from project_colors import (ProjectFileSystemModel, ProjectColorPopup,
 from markup import MarkupController
 from settings_ui import SettingsDialog
 from app_settings import ProjectSettings
+from ai_requests import AIPanel
 from kokoro_tts.footer import KokoroFooter
 
 
@@ -2253,6 +2254,8 @@ class MainWindow(QMainWindow):
             header.addWidget(close_button)
             reference_layout.insertLayout(0, header)
             self.left_panels.addWidget(panel)
+        self.ai_panel = AIPanel(self)
+        self.left_panels.addWidget(self.ai_panel)
         self.workspace_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.workspace_splitter.setChildrenCollapsible(False)
         self.workspace_splitter.addWidget(self.left_panels)
@@ -2795,7 +2798,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(markup_button)
         self.ribbon_buttons["Markup"] = markup_button
         self.markup = MarkupController(self, markup_button)
+        ai_button = BoxIconButton("ai", self.ribbon)
+        ai_button.setFixedSize(36, 36)
+        ai_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        ai_button.setAccessibleName("AI")
+        ai_button.setToolTip("AI requests")
+        ai_button.clicked.connect(self.toggle_ai_panel)
+        layout.addWidget(ai_button)
+        self.ribbon_buttons["AI"] = ai_button
         layout.addStretch(1)
+
         tools_button = BoxIconButton("toolbox", self.ribbon)
         tools_button.setFixedSize(36, 36)
         tools_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -3872,6 +3884,17 @@ class MainWindow(QMainWindow):
             return False
         return self.open_file(self.current_file, reload=True)
 
+    def toggle_ai_panel(self):
+        if self.left_panels.isVisible() and self.left_panels.currentWidget() is self.ai_panel:
+            self.close_left_panel()
+            return
+        for name in ("Scatchpad", "Project tree", "Search project"):
+            self.ribbon_buttons[name].setChecked(False)
+        self.ai_panel.capture_selection()
+        self.left_panels.setCurrentWidget(self.ai_panel)
+        self.left_panels.show()
+        self.ai_panel.requests.setFocus()
+
     def toggle_scratchpad(self, visible):
         if visible:
             self.ribbon_buttons["Project tree"].setChecked(False)
@@ -4501,6 +4524,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):  # noqa: N802
         if getattr(self, "_updating", False) or self.confirm_close_tabs():
             self.kokoro_footer.shutdown()
+            self.ai_panel.cancel_request()
             self.reference_tools.cancel()
             self.project_search.cancel()
             self.settings.setValue("window_geometry", self.saveGeometry())
