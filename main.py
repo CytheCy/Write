@@ -2254,7 +2254,7 @@ class MainWindow(QMainWindow):
             header.addWidget(close_button)
             reference_layout.insertLayout(0, header)
             self.left_panels.addWidget(panel)
-        self.ai_panel = AIPanel(self)
+        self.ai_panel = AIPanel(self, BoxIconButton)
         self.left_panels.addWidget(self.ai_panel)
         self.workspace_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.workspace_splitter.setChildrenCollapsible(False)
@@ -3811,9 +3811,13 @@ class MainWindow(QMainWindow):
                 and watched.window() is self):
             # Blank margins and other non-focusable widgets otherwise leave
             # QTextEdit focused, with its caret still blinking in the note.
-            # Reference buttons need the selection for their lookup.
+            # Reference and AI controls need the document selection.
+            ai_panel = getattr(self, "ai_panel", None)
             if (watched is not self.editor.viewport()
                     and not self.editor.viewport().isAncestorOf(watched)
+                    and watched is not self.ribbon_buttons.get("AI")
+                    and not (ai_panel is not None
+                             and (watched is ai_panel or ai_panel.isAncestorOf(watched)))
                     and watched not in (self.ribbon_buttons[name]
                                         for name in self.reference_panels)):
                 self.editor.dismiss_cursor()

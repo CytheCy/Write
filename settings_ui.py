@@ -192,10 +192,10 @@ class SettingsDialog(QDialog):
         form.addRow('Endpoint:', self.ai_endpoint)
         self.ai_model = QLineEdit(self.editor_window.settings.value('ai/model', '', type=str))
         self.ai_model.setAccessibleName('AI model')
-        self.ai_model.setPlaceholderText('Model name supplied by your AI service')
+        self.ai_model.setPlaceholderText('Exact API model ID supplied by your AI service')
         self.ai_model.editingFinished.connect(lambda: self.editor_window.settings.setValue(
             'ai/model', self.ai_model.text().strip()))
-        form.addRow('Model:', self.ai_model)
+        form.addRow('API model ID:', self.ai_model)
         layout.addLayout(form)
         layout.addWidget(KeyPathRow('AI', 'ai/key_file', self.editor_window.settings, label='AI API key file'))
         note = QLabel('Attachments: UTF-8 text, Markdown, CSV, JSON, DOCX, PDF, PNG, JPEG, '

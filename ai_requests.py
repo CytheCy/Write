@@ -62,7 +62,7 @@ def build_payload(model, prompt, selection, paths):
         content.append({'type': 'text', 'text': f'Supporting attachment: {path.name}\n{text}'})
     return {'model': model, 'messages': [
         {'role': 'system', 'content': prompt},
-        {'role': 'user', 'content': content},
+        {'role': 'user', 'content': content if paths else content[0]['text']},
     ]}
 
 
@@ -111,7 +111,7 @@ class RequestDialog(QDialog):
 
 
 class AIPanel(QWidget):
-    def __init__(self, window):
+    def __init__(self, window, icon_button):
         super().__init__()
         self.window = window
         self.settings = window.settings
@@ -129,13 +129,22 @@ class AIPanel(QWidget):
         layout = QVBoxLayout(self)
         header = QHBoxLayout()
         header.addWidget(QLabel('AI requests'), 1)
-        add = QPushButton('+')
+        add = icon_button('plus')
+        add.setFixedSize(28, 28)
         add.setAccessibleName('Add AI request')
         add.setToolTip('Add a request')
         add.clicked.connect(self.add_request)
         header.addWidget(add)
-        close = QPushButton('×')
+        edit_button = icon_button('edit')
+        edit_button.setFixedSize(28, 28)
+        edit_button.setAccessibleName('Edit AI request')
+        edit_button.setToolTip('Edit request…')
+        edit_button.clicked.connect(self.edit_request)
+        header.addWidget(edit_button)
+        close = icon_button('x')
+        close.setFixedSize(28, 28)
         close.setAccessibleName('Close AI panel')
+        close.setToolTip('Close AI panel')
         close.clicked.connect(window.close_left_panel)
         header.addWidget(close)
         layout.addLayout(header)
@@ -145,16 +154,13 @@ class AIPanel(QWidget):
         self.requests.itemClicked.connect(self.run_request)
         self.requests.itemActivated.connect(self.run_request)
         layout.addWidget(self.requests)
-        edit = QPushButton('Edit request…')
-        edit.clicked.connect(self.edit_request)
-        layout.addWidget(edit)
         self.selection_label = QLabel('Select text in the document, then open AI.')
         self.selection_label.setWordWrap(True)
         layout.addWidget(self.selection_label)
         capture = QPushButton('Use current selection')
         capture.clicked.connect(self.capture_selection)
         layout.addWidget(capture)
-        layout.addWidget(QLabel('Attachments · supporting content'))
+        layout.addWidget(QLabel('Attachments · optional supporting content'))
         self.attachments = QListWidget()
         self.attachments.setAccessibleName('AI attachments')
         self.attachments.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -172,7 +178,7 @@ class AIPanel(QWidget):
         self.output = QTextEdit()
         self.output.setAcceptRichText(False)
         self.output.setAccessibleName('AI result')
-        self.output.setPlaceholderText('Click a request above to send the selection and attachments.')
+        self.output.setPlaceholderText('Click a request above to send the selected text. Attachments are optional.')
         layout.addWidget(self.output, 1)
         self.status = QLabel('')
         self.status.setWordWrap(True)
@@ -266,8 +272,9 @@ class AIPanel(QWidget):
     def run_request(self, item):
         if self.reply is not None:
             return
+        self.capture_selection()
         if not self.valid_target(self.cursor, self.selected_text):
-            self.status.setText('Select text in the document and click Use current selection.')
+            self.status.setText('Select text in the document, then click a request.')
             return
         try:
             key_path = self.settings.value('ai/key_file', '', type=str)
@@ -318,8 +325,11 @@ class AIPanel(QWidget):
         try:
             if reply.error() != QNetworkReply.NetworkError.NoError:
                 code = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
-                raise ValueError(f'AI request failed (HTTP {code}). Check Settings and try again.' if code
-                                 else 'AI request failed. Check the connection and try again.')
+                detail = self.service_error(reply)
+                summary = (f'AI request failed (HTTP {code}).' if code else
+                           f'AI request failed: {reply.errorString()}')
+                raise ValueError(f'{summary} {detail}' if detail else
+                                 f'{summary} Check Settings → AI and the connection, then try again.')
             code = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
             if code is None or not 200 <= int(code) < 300:
                 raise ValueError('The endpoint did not return a successful response. Check Settings → AI.')
@@ -332,6 +342,23 @@ class AIPanel(QWidget):
             self.status.setText(str(error))
         finally:
             reply.deleteLater()
+
+    @staticmethod
+    def service_error(reply):
+        """Show useful provider diagnostics without exposing the credential."""
+        try:
+            data = json.loads(bytes(reply.read(65536)))
+            error = data.get('error', {}) if isinstance(data, dict) else {}
+            message = error.get('message', '') if isinstance(error, dict) else error
+            if not isinstance(message, str):
+                return ''
+            authorization = bytes(reply.request().rawHeader('Authorization')).decode('utf-8')
+            key = authorization.removeprefix('Bearer ')
+            if key:
+                message = message.replace(key, '[API key hidden]')
+            return ' '.join(message.split())[:1000]
+        except (ValueError, TypeError, UnicodeError):
+            return ''
 
     def update_paste(self):
         self.paste.setEnabled(self.result_cursor is not None and bool(self.output.toPlainText().strip()))

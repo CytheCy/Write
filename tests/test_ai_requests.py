@@ -16,7 +16,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QListWidgetItem
 
 from ai_requests import AIPanel, RequestDialog, build_payload, response_text
-from main import MainWindow
+from main import BoxIconButton, MainWindow
 
 
 class PayloadTests(unittest.TestCase):
@@ -146,6 +146,52 @@ class AITests(unittest.TestCase):
         self.window.editor.undo()
         self.assertEqual(self.window.editor.toPlainText(), 'Before\nSelected passage\nAfter')
 
+    def test_mouse_clicking_ai_icon_preserves_selection(self):
+        self.window.close_left_panel()
+        self.window.editor.selectAll()
+        self.app.processEvents()
+        expected = self.window.editor.textCursor().selectedText()
+        QTest.mouseClick(self.window.ribbon_buttons['AI'], Qt.MouseButton.LeftButton)
+        self.assertTrue(self.panel.isVisible())
+        self.assertEqual(self.window.editor.textCursor().selectedText(), expected)
+        self.assertEqual(self.panel.selected_text, expected)
+
+    def test_click_request_sends_current_selection_without_attachments(self):
+        received = self.serve()
+        # The panel was opened with an earlier selection; select new text
+        # without closing it or pressing Use current selection.
+        cursor = self.window.editor.textCursor()
+        cursor.setPosition(24)
+        cursor.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
+        self.window.editor.setTextCursor(cursor)
+        self.app.processEvents()
+        item = self.panel.requests.item(0)
+        QTest.mouseClick(self.panel.requests.viewport(), Qt.MouseButton.LeftButton,
+                         pos=self.panel.requests.visualItemRect(item).center())
+        self.assertIsNotNone(self.panel.reply, self.panel.status.text())
+        self.finish()
+        self.assertEqual(len(received), 1)
+        body = received[0][2]
+        self.assertEqual(body['messages'][0]['content'], 'Improve the selected passage.')
+        self.assertEqual(body['messages'][1]['content'],
+                         'Selected document text (the material to work on):\nAfter')
+        self.assertEqual(self.panel.attachments.count(), 0)
+        self.assertEqual(self.panel.output.toPlainText(), 'Improved passage')
+        self.panel.paste.click()
+        self.assertEqual(self.window.editor.toPlainText(),
+                         'Before\nSelected passage\nImproved passage\n\nAfter')
+
+    def test_provider_model_error_is_visible_and_credentials_are_hidden(self):
+        self.serve(status=400, response={'error': {
+            'message': 'Unknown model display-name. API key test-key.'}})
+        self.panel.run_request(self.panel.requests.item(0))
+        self.finish()
+        self.assertIn('HTTP 400', self.panel.status.text())
+        self.assertIn('Unknown model display-name', self.panel.status.text())
+        self.assertNotIn('test-key', self.panel.status.text())
+        self.assertIn('[API key hidden]', self.panel.status.text())
+        self.assertFalse(self.panel.paste.isEnabled())
+
     def test_paste_tracks_edits_before_selection(self):
         self.result()
         cursor = QTextCursor(self.window.editor.document())
@@ -197,7 +243,7 @@ class AITests(unittest.TestCase):
 
     def test_saved_requests_and_settings_survive_panel_recreation(self):
         self.panel.save_requests()
-        other = AIPanel(self.window)
+        other = AIPanel(self.window, BoxIconButton)
         self.assertEqual(other.requests.item(0).text(), 'Rewrite')
         self.assertEqual(other.requests.item(0).data(Qt.ItemDataRole.UserRole), 'Improve the selected passage.')
         other.deleteLater()
@@ -218,11 +264,13 @@ class AITests(unittest.TestCase):
         dialog.deleteLater()
 
     def test_no_selection_or_key_does_not_send(self):
-        self.panel.cursor = None
+        cursor = self.window.editor.textCursor()
+        cursor.clearSelection()
+        self.window.editor.setTextCursor(cursor)
         self.panel.run_request(self.panel.requests.item(0))
         self.assertIsNone(self.panel.reply)
         self.assertIn('Select text', self.panel.status.text())
-        self.panel.capture_selection()
+        self.window.editor.selectAll()
         self.window.settings.setValue('ai/key_file', '')
         self.panel.run_request(self.panel.requests.item(0))
         self.assertIsNone(self.panel.reply)
