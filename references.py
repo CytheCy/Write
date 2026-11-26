@@ -43,7 +43,7 @@ class ReferencePanel(QWidget):
         self.search_button.clicked.connect(lambda: tools.search(self.search_input.text()))
         row.addWidget(self.search_button)
         layout.addLayout(row)
-        if SOURCES[name][1]:
+        if name != 'Dictionary' and SOURCES[name][1]:
             settings_button = QPushButton('API key files…')
             settings_button.clicked.connect(tools.show_settings)
             layout.addWidget(settings_button)
