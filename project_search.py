@@ -154,7 +154,7 @@ class SearchResults(QTreeWidget):
 class ProjectSearchPanel(QWidget):
     match_requested = Signal(object)
 
-    def __init__(self, root, close_button, snapshots, parent=None):
+    def __init__(self, root, snapshots, parent=None):
         super().__init__(parent)
         self.setObjectName('projectSearchPanel')
         self.root, self.snapshots = Path(root), snapshots
@@ -165,7 +165,6 @@ class ProjectSearchPanel(QWidget):
         layout.setContentsMargins(8, 12, 8, 10)
         header = QHBoxLayout()
         header.addWidget(QLabel('Search project'), 1)
-        header.addWidget(close_button)
         layout.addLayout(header)
         self.root_label = QLabel()
         self.root_label.setTextFormat(Qt.TextFormat.PlainText)

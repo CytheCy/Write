@@ -16,7 +16,7 @@ from pathlib import Path
 
 from PySide6.QtCore import (
     QAbstractAnimation, QByteArray, QCoreApplication, QEasingCurve, QEvent, QEventLoop,
-    QFile, QObject, QPoint, QRect, QRectF, QSaveFile, QSettings, Qt, QTimer, QUrl, QVariantAnimation, Signal, Slot,
+    QFile, QModelIndex, QObject, QPoint, QRect, QRectF, QSaveFile, QSettings, Qt, QTimer, QUrl, QVariantAnimation, Signal, Slot,
 )
 from PySide6.QtDBus import QDBusConnection, QDBusInterface, QDBusMessage
 from PySide6.QtGui import (
@@ -2231,13 +2231,8 @@ class MainWindow(QMainWindow):
         self.project_tree_path = Path(self.settings.value("project_tree_path", type=str))
         self.setup_project_tree()
         self.left_panels.addWidget(self.project_panel)
-        search_close = BoxIconButton("x")
-        search_close.setFixedSize(28, 28)
-        search_close.setAccessibleName("Close project search")
-        search_close.setToolTip("Close project search")
-        search_close.clicked.connect(self.close_left_panel)
         self.project_search = ProjectSearchPanel(
-            self.project_tree_path, search_close, self.project_search_snapshots)
+            self.project_tree_path, self.project_search_snapshots)
         self.project_search.match_requested.connect(self.open_project_match)
         self.left_panels.addWidget(self.project_search)
         self.reference_tools = ReferenceTools(self.settings, self)
@@ -2246,12 +2241,6 @@ class MainWindow(QMainWindow):
             reference_layout = panel.layout()
             header = QHBoxLayout()
             header.addWidget(QLabel(name), 1)
-            close_button = BoxIconButton("x", panel)
-            close_button.setFixedSize(28, 28)
-            close_button.setAccessibleName(f"Close {name}")
-            close_button.setToolTip(f"Close {name}")
-            close_button.clicked.connect(self.close_left_panel)
-            header.addWidget(close_button)
             reference_layout.insertLayout(0, header)
             self.left_panels.addWidget(panel)
         self.ai_panel = AIPanel(self, BoxIconButton)
@@ -2719,6 +2708,7 @@ class MainWindow(QMainWindow):
         self.tab_bar.setDrawBase(False)
         self.tab_bar.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.tab_bar.currentChanged.connect(self.activate_tab)
+        self.tab_bar.tabBarClicked.connect(self.activate_tab)
         self.tab_bar.tabCloseRequested.connect(self.close_tab)
         self.title_label = self.tab_bar
         self.document_path_popup = DocumentPathPopup(self, self.title_label)
@@ -2781,6 +2771,7 @@ class MainWindow(QMainWindow):
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             button.setAccessibleName(name)
             button.setToolTip(name)
+            button.setCheckable(True)
             button.clicked.connect(
                 lambda checked=False, selected=name: self.toggle_reference_panel(selected))
             layout.addWidget(button)
@@ -2808,6 +2799,7 @@ class MainWindow(QMainWindow):
         ai_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         ai_button.setAccessibleName("AI")
         ai_button.setToolTip("AI requests")
+        ai_button.setCheckable(True)
         ai_button.clicked.connect(self.toggle_ai_panel)
         layout.addWidget(ai_button)
         self.ribbon_buttons["AI"] = ai_button
@@ -2873,12 +2865,13 @@ class MainWindow(QMainWindow):
         font.setPointSizeF(font.pointSizeF() + 2)
         self.project_root_label.setFont(font)
         header.addWidget(self.project_root_label, 1)
-        close = BoxIconButton("x", self.project_panel)
-        close.setFixedSize(28, 28)
-        close.setAccessibleName("Close project tree")
-        close.setToolTip("Close project tree")
-        close.clicked.connect(self.close_left_panel)
-        header.addWidget(close)
+        self.collapse_project_tree_button = BoxIconButton("list-collapse", self.project_panel)
+        self.collapse_project_tree_button.setFixedSize(30, 30)
+        self.collapse_project_tree_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.collapse_project_tree_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.collapse_project_tree_button.setToolTip("Collapse all folders")
+        self.collapse_project_tree_button.setAccessibleName("Collapse all folders")
+        header.addWidget(self.collapse_project_tree_button)
         layout.addLayout(header)
         self.project_model = ProjectFileSystemModel(self)
         self.project_model.setReadOnly(True)
@@ -2888,6 +2881,7 @@ class MainWindow(QMainWindow):
         self.project_tree.setModel(self.project_model)
         self.project_tree.setItemDelegate(ProjectTreeDelegate(self.project_tree))
         self.project_tree.setHeaderHidden(True)
+        self.collapse_project_tree_button.clicked.connect(self.project_tree.collapseAll)
         for column in range(1, self.project_model.columnCount()):
             self.project_tree.hideColumn(column)
         self.project_tree.clicked.connect(self.open_project_item)
@@ -3037,6 +3031,28 @@ class MainWindow(QMainWindow):
         self.project_root_label.setText(self.project_tree_path.name or path)
         self.project_root_label.setToolTip(path)
         self.project_tree.setRootIndex(self.project_model.setRootPath(path))
+        self.sync_project_tree_document()
+
+    def sync_project_tree_document(self):
+        """Select and reveal the active file without moving keyboard focus."""
+        path = self.current_file
+        root = self.project_tree_path.resolve()
+        if path is None or not path.is_relative_to(root):
+            self.project_tree.clearSelection()
+            self.project_tree.setCurrentIndex(QModelIndex())
+            return
+        index = self.project_model.index(str(self.project_tree_path / path.relative_to(root)))
+        if not index.isValid():
+            self.project_tree.clearSelection()
+            self.project_tree.setCurrentIndex(QModelIndex())
+            return
+        parent = index.parent()
+        root_index = self.project_tree.rootIndex()
+        while parent.isValid() and parent != root_index:
+            self.project_tree.expand(parent)
+            parent = parent.parent()
+        self.project_tree.setCurrentIndex(index)
+        self.project_tree.scrollTo(index)
 
     def set_project_tree_path(self, path):
         path = Path(path).expanduser().absolute()
@@ -3057,22 +3073,15 @@ class MainWindow(QMainWindow):
         if self.left_panels.isVisible() and self.left_panels.currentWidget() is self.project_panel:
             self.close_left_panel()
         else:
-            self.ribbon_buttons["Scatchpad"].setChecked(False)
-            self.ribbon_buttons["Search project"].setChecked(False)
-            self.ribbon_buttons["Project tree"].setChecked(True)
-            self.left_panels.setCurrentWidget(self.project_panel)
-            self.left_panels.show()
+            self.open_left_panel(self.project_panel)
+            self.sync_project_tree_document()
             self.project_tree.setFocus()
 
     def toggle_project_search(self):
         if self.left_panels.isVisible() and self.left_panels.currentWidget() is self.project_search:
             self.close_left_panel()
             return
-        self.ribbon_buttons["Scatchpad"].setChecked(False)
-        self.ribbon_buttons["Project tree"].setChecked(False)
-        self.ribbon_buttons["Search project"].setChecked(True)
-        self.left_panels.setCurrentWidget(self.project_search)
-        self.left_panels.show()
+        self.open_left_panel(self.project_search)
         self.project_search.input.setFocus()
         self.project_search.input.selectAll()
         self.project_search.schedule_search()
@@ -3149,8 +3158,9 @@ class MainWindow(QMainWindow):
     def open_project_item(self, index):
         if index.isValid() and not self.project_model.isDir(index):
             new_tab = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier)
-            self.open_file(Path(self.project_model.filePath(index)), focus_editor=False,
-                           replace_current=not new_tab)
+            if not self.open_file(Path(self.project_model.filePath(index)), focus_editor=False,
+                                  replace_current=not new_tab):
+                self.sync_project_tree_document()
 
     def set_ribbon_auto_hide(self, enabled):
         self.ribbon_auto_hide = enabled
@@ -3897,23 +3907,16 @@ class MainWindow(QMainWindow):
         if self.left_panels.isVisible() and self.left_panels.currentWidget() is self.ai_panel:
             self.close_left_panel()
             return
-        for name in ("Scatchpad", "Project tree", "Search project"):
-            self.ribbon_buttons[name].setChecked(False)
         self.ai_panel.capture_selection()
-        self.left_panels.setCurrentWidget(self.ai_panel)
-        self.left_panels.show()
+        self.open_left_panel(self.ai_panel)
         self.ai_panel.requests.setFocus()
 
     def toggle_scratchpad(self, visible):
         if visible:
-            self.ribbon_buttons["Project tree"].setChecked(False)
-            self.ribbon_buttons["Search project"].setChecked(False)
-            self.left_panels.setCurrentWidget(self.scratchpad_panel)
-            self.left_panels.show()
+            self.open_left_panel(self.scratchpad_panel)
             self.scratchpad_editor.setFocus()
         else:
-            self.left_panels.hide()
-            self.editor.setFocus()
+            self.close_left_panel()
 
     def lookup_hovered_word(self):
         viewport = self.editor.viewport()
@@ -3954,22 +3957,36 @@ class MainWindow(QMainWindow):
     def open_reference_panel(self, name, *, word=None):
         if word is None:
             word = self.editor.textCursor().selectedText().replace('\u2029', ' ').strip()
-        button = self.ribbon_buttons["Scatchpad"]
-        button.setChecked(False)
-        self.ribbon_buttons["Project tree"].setChecked(False)
-        self.ribbon_buttons["Search project"].setChecked(False)
         panel = self.reference_panels[name]
-        self.left_panels.setCurrentWidget(panel)
-        self.left_panels.show()
+        self.open_left_panel(panel)
         if word:
             self.reference_tools.search(word)
         panel.search_input.setFocus()
         panel.search_input.selectAll()
 
+    def update_left_panel_buttons(self, active_panel=None):
+        panels = {
+            "Project tree": self.project_panel,
+            "Search project": self.project_search,
+            "Scatchpad": self.scratchpad_panel,
+            **self.reference_panels,
+            "AI": self.ai_panel,
+        }
+        for name, panel in panels.items():
+            button = self.ribbon_buttons[name]
+            # Scratchpad's toggled signal opens/closes its panel. Updating the
+            # highlight while switching panels must not trigger that behavior.
+            blocked = button.blockSignals(True)
+            button.setChecked(panel is active_panel)
+            button.blockSignals(blocked)
+
+    def open_left_panel(self, panel):
+        self.left_panels.setCurrentWidget(panel)
+        self.left_panels.show()
+        self.update_left_panel_buttons(panel)
+
     def close_left_panel(self):
-        self.ribbon_buttons["Scatchpad"].setChecked(False)
-        self.ribbon_buttons["Project tree"].setChecked(False)
-        self.ribbon_buttons["Search project"].setChecked(False)
+        self.update_left_panel_buttons()
         self.left_panels.hide()
         self.editor.setFocus()
 
@@ -4052,7 +4069,10 @@ class MainWindow(QMainWindow):
                                    editor.verticalScrollBar().value(), editor.horizontalScrollBar().value()))
 
     def activate_tab(self, index, *, focus_editor=True):
-        if index < 0 or index >= len(self._tabs) or index == self._active_tab:
+        if index < 0 or index >= len(self._tabs):
+            return
+        if index == self._active_tab:
+            self.sync_project_tree_document()
             return
         self.stash_tab()
         tab = self._tabs[index]
@@ -4081,6 +4101,7 @@ class MainWindow(QMainWindow):
             self.setUpdatesEnabled(True)
         self.update_title()
         self.update_status()
+        self.sync_project_tree_document()
         if self.search_controls():
             self.update_find_matches()
         self.editor.spelling.refresh()
@@ -4223,6 +4244,7 @@ class MainWindow(QMainWindow):
             self.editor.document().clearUndoRedoStacks()
         finally:
             self.setUpdatesEnabled(updates_enabled)
+        self.sync_project_tree_document()
         return True
 
     def mark_loaded_source_saved(self):
@@ -4250,6 +4272,7 @@ class MainWindow(QMainWindow):
         self.load_document_source('')
         self.loading = False
         self.current_file = None
+        self.sync_project_tree_document()
         self.newline = "\n"
         self.has_bom = False
         self.editor.update_code_panels(full=False)
@@ -4319,6 +4342,7 @@ class MainWindow(QMainWindow):
         if not self.save_file():
             self.current_file = previous
             return False
+        self.sync_project_tree_document()
         return True
 
     def on_text_changed(self):

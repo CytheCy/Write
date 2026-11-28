@@ -147,7 +147,7 @@ class RibbonTests(unittest.TestCase):
         self.assertFalse(button.isChecked())
         self.assertTrue(w.scratchpad_panel.isVisible())
         button.click()
-        w.project_panel.findChild(QToolButton).click()
+        button.click()
         self.assertFalse(w.left_panels.isVisible())
         self.assertFalse(button.isChecked())
 
@@ -303,16 +303,30 @@ class RibbonTests(unittest.TestCase):
                     search.assert_not_called()
                     self.assertFalse(w.left_panels.isVisible())
 
-    def test_reference_close_button_allows_reopening_from_icon(self):
+    def test_left_panels_have_no_close_icons_and_only_active_icon_is_checked(self):
         w = self.window
-        for name, panel in w.reference_panels.items():
+        panels = {
+            'Project tree': w.project_panel,
+            'Search project': w.project_search,
+            'Scatchpad': w.scratchpad_panel,
+            **w.reference_panels,
+            'AI': w.ai_panel,
+        }
+        for name, panel in panels.items():
             with self.subTest(panel=name):
-                w.ribbon_buttons[name].click()
-                panel.findChild(QToolButton).click()
-                self.assertFalse(w.left_panels.isVisible())
+                self.assertFalse(any(getattr(button, 'icon_name', None) == 'x'
+                                     for button in panel.findChildren(QToolButton)))
                 w.ribbon_buttons[name].click()
                 self.assertTrue(panel.isVisible())
-                w.close_left_panel()
+                self.assertEqual([key for key in panels if w.ribbon_buttons[key].isChecked()],
+                                 [name])
+                w.ribbon_buttons[name].click()
+                self.assertFalse(w.left_panels.isVisible())
+                self.assertFalse(any(w.ribbon_buttons[key].isChecked() for key in panels))
+                # Leave this panel open to check switching on the next iteration.
+                w.ribbon_buttons[name].click()
+        w.close_left_panel()
+        self.assertFalse(any(w.ribbon_buttons[key].isChecked() for key in panels))
 
     def test_open_reference_without_selection_keeps_existing_search(self):
         w = self.window
@@ -325,6 +339,7 @@ class RibbonTests(unittest.TestCase):
                     w.open_reference_panel(name)
                     search.assert_not_called()
                 self.assertEqual(panel.search_input.text(), 'previous')
+                self.assertTrue(w.ribbon_buttons[name].isChecked())
 
     def test_open_reference_ignores_whitespace_selection(self):
         w = self.window

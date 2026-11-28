@@ -129,6 +129,7 @@ def stylesheet(t):
         #editor {{ border: none; }}
         #headingPanel, #scratchpadPanel, #projectPanel, #projectSearchPanel, #leftPanels {{ background: {t['sidebar']}; }}
         #scratchpadEditor {{ border: none; }}
+        #projectTree::item:selected {{ background: {t['selection']}; color: {t['selection_text']}; }}
         #projectSearchResults {{ background: {t['sidebar']}; border: none; }}
         #projectSearchResults::item:hover {{ background: {t['hover']}; }}
         #referencePanel, #referencePanel QScrollArea, #referencePanel QScrollArea > QWidget > QWidget {{
